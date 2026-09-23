@@ -1,0 +1,19 @@
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
+import morgan from 'morgan';
+import rateLimit from 'express-rate-limit';
+import authRoutes from './routes/auth';
+import fileRoutes from './routes/files';
+import dashboardRoutes from './routes/dashboard';
+import { config } from './config';
+import { errorHandler } from './middleware/errors';
+
+export const app = express();
+app.use(helmet()); app.use(cors({ origin: config.frontendUrl, credentials: true })); app.use(express.json({ limit: '1mb' })); app.use(cookieParser()); app.use(morgan('combined'));
+app.use('/api/auth', rateLimit({ windowMs: 15 * 60 * 1000, limit: 100 }), authRoutes);
+app.use('/api/files', fileRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.get('/api/health', (_req, res) => res.json({ success: true, message: 'TeleVault API is healthy', data: {} }));
+app.use(errorHandler);
