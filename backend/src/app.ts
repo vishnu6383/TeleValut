@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
@@ -16,5 +16,5 @@ app.use(helmet()); app.use(cors({ origin: config.frontendUrl, credentials: true 
 app.use('/api/auth', rateLimit({ windowMs: 15 * 60 * 1000, limit: 100 }), authRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/dashboard', dashboardRoutes);
-app.get('/api/health', (_req, res) => res.json({ success: true, message: 'TeleVault API is healthy', data: {} }));
+app.get('/api/health', (_req: Request, res: Response) => res.json({ success: true, message: 'TeleVault API is healthy', data: {} }));
 app.use(errorHandler);
