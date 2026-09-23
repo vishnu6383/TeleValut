@@ -23,10 +23,11 @@ const issueCookie = (res: import('express').Response, userId: string) => {
   const token = jwt.sign({ sub: userId }, config.jwtSecret, {
     expiresIn: config.jwtExpiresIn as jwt.SignOptions['expiresIn'],
   });
+  const isProd = process.env.NODE_ENV === 'production';
   res.cookie('televault_token', token, {
     httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    sameSite: isProd ? 'none' : 'lax',
+    secure: isProd,
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 };
@@ -248,7 +249,12 @@ router.post('/login', async (req, res, next) => {
 
 // 5. LOGOUT & CURRENT USER
 router.post('/logout', (_req, res) => {
-  res.clearCookie('televault_token');
+  const isProd = process.env.NODE_ENV === 'production';
+  res.clearCookie('televault_token', {
+    httpOnly: true,
+    sameSite: isProd ? 'none' : 'lax',
+    secure: isProd,
+  });
   return success(res, {}, 'Logged out.');
 });
 

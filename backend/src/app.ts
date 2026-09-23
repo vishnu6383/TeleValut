@@ -11,6 +11,7 @@ import { config } from './config';
 import { errorHandler } from './middleware/errors';
 
 export const app = express();
+app.set('trust proxy', 1);
 app.use(helmet()); app.use(cors({ origin: config.frontendUrl, credentials: true })); app.use(express.json({ limit: '1mb' })); app.use(cookieParser()); app.use(morgan('combined'));
 app.use('/api/auth', rateLimit({ windowMs: 15 * 60 * 1000, limit: 100 }), authRoutes);
 app.use('/api/files', fileRoutes);
