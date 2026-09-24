@@ -19,11 +19,17 @@
   🚀 <b>Live Production App:</b> <a href="https://televalut-app.onrender.com/login/"><b>https://televalut-app.onrender.com/login/</b></a>
 </p>
 
-[🌐 Live Demo](https://televalut-app.onrender.com/login/) • [✨ Features](#-key-features) • [🏛️ Architecture](#-system-architecture) • [🚀 Quick Start](#-getting-started) • [⚙️ Configuration](#-environment-variables)
+[🌐 Live Demo](https://televalut-app.onrender.com/login/) • [🎬 Demo Video](#-live-demo-video) • [✨ Features](#-key-features) • [🏛️ Architecture](#-system-architecture) • [🚀 Quick Start](#-getting-started) • [⚙️ Configuration](#-environment-variables)
 
 ---
 
 </div>
+
+## 🎬 Live Demo Video
+
+https://github.com/vishnu6383/TeleValut/raw/main/assets/televalut-demo.mp4
+
+---
 
 ## 🌟 Overview
 
