@@ -3,6 +3,7 @@
 # ⚡ TeleVault
 ### *Unlimited, Encrypted Cloud Storage Powered by Telegram Bot API & MongoDB Atlas*
 
+[![Live App](https://img.shields.io/badge/Live_Demo-TeleVault_App-7928CA?style=for-the-badge&logo=render&logoColor=white)](https://televalut-app.onrender.com/login/)
 [![Next.js](https://img.shields.io/badge/Next.js-14.2-black?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
@@ -14,7 +15,11 @@
   <b>TeleVault</b> transforms the Telegram Bot API into a secure, infinite, and zero-cost cloud storage drive with a high-performance, modern web UI.
 </p>
 
-[✨ Live Features](#-key-features) • [🏛️ Architecture](#-system-architecture) • [🚀 Quick Start](#-getting-started) • [⚙️ Configuration](#-environment-variables) • [🖼️ Gallery Experience](#-photo-gallery--lightbox)
+<p align="center">
+  🚀 <b>Live Production App:</b> <a href="https://televalut-app.onrender.com/login/"><b>https://televalut-app.onrender.com/login/</b></a>
+</p>
+
+[🌐 Live Demo](https://televalut-app.onrender.com/login/) • [✨ Features](#-key-features) • [🏛️ Architecture](#-system-architecture) • [🚀 Quick Start](#-getting-started) • [⚙️ Configuration](#-environment-variables)
 
 ---
 
