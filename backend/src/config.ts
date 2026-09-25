@@ -1,5 +1,10 @@
+import dns from 'node:dns';
 import path from 'node:path';
 import dotenv from 'dotenv';
+
+if (typeof dns.setDefaultResultOrder === 'function') {
+  dns.setDefaultResultOrder('ipv4first');
+}
 
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 

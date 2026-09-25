@@ -1,5 +1,11 @@
+import dns from 'node:dns';
 import nodemailer from 'nodemailer';
 import { config } from '../config';
+
+// Prioritize IPv4 DNS lookups to avoid 'connect ENETUNREACH' errors on networks without IPv6 connectivity
+if (typeof dns.setDefaultResultOrder === 'function') {
+  dns.setDefaultResultOrder('ipv4first');
+}
 
 const createTransporter = () => {
   if (!config.email.host || !config.email.user || !config.email.password) {

@@ -1,3 +1,9 @@
+import dns from 'node:dns';
+
+if (typeof dns.setDefaultResultOrder === 'function') {
+  dns.setDefaultResultOrder('ipv4first');
+}
+
 import { app } from './app';
 import { config } from './config';
 import { closeDatabase, initializeDatabase } from './config/database';
