@@ -2,7 +2,7 @@ import dns from 'node:dns';
 import nodemailer from 'nodemailer';
 import { config } from '../config';
 
-// Prioritize IPv4 DNS lookups to avoid 'connect ENETUNREACH' errors on networks without IPv6 connectivity
+// Force IPv4 lookup priority across Node runtime
 if (typeof dns.setDefaultResultOrder === 'function') {
   dns.setDefaultResultOrder('ipv4first');
 }
@@ -15,14 +15,18 @@ const createTransporter = () => {
     host: config.email.host,
     port: config.email.port,
     secure: config.email.port === 465,
+    family: 4,
     auth: {
       user: config.email.user,
       pass: config.email.password,
     },
     tls: {
-      rejectUnauthorized: process.env.NODE_ENV === 'production',
+      rejectUnauthorized: false,
     },
-  });
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
+  } as any);
 };
 
 const transporter = createTransporter();
@@ -58,63 +62,51 @@ export const sendVerificationOTP = async (
 ): Promise<void> => {
   if (!transporter) {
     throw new Error(
-      'Email service is not configured. Please set EMAIL_HOST, EMAIL_PORT, EMAIL_USER, and EMAIL_PASSWORD in .env'
+      'Email service is not configured. Please provide EMAIL_HOST, EMAIL_PORT, EMAIL_USER, and EMAIL_PASSWORD.'
     );
   }
 
-  const subject = 'Verify your TeleVault account';
-  const textContent = `Hello ${fullName || 'User'},
-
-Your TeleVault verification code is:
-${otp}
-
-This code will expire in 10 minutes.
-If you did not create this account, you can safely ignore this email.
-
-Regards,
-TeleVault Team`;
-
   const htmlContent = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>${subject}</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0d1312; color: #f1f7f5; margin: 0; padding: 24px; }
-    .card { max-width: 480px; margin: 0 auto; background: #131c1a; border: 1px solid #1f2f2c; border-radius: 16px; padding: 32px; }
-    .logo { color: #d7e87e; font-size: 20px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 24px; }
-    .heading { font-size: 22px; font-weight: 700; color: #ffffff; margin-top: 0; margin-bottom: 12px; }
-    .text { font-size: 14px; line-height: 1.6; color: #a4bab4; margin-bottom: 24px; }
-    .otp-box { background: #080c0b; border: 1px solid #2a413d; border-radius: 12px; padding: 18px; text-align: center; margin: 24px 0; }
-    .otp-code { font-size: 32px; font-weight: 800; letter-spacing: 10px; color: #d7e87e; font-family: monospace; }
-    .footer { font-size: 12px; color: #627b75; margin-top: 28px; border-top: 1px solid #1a2724; padding-top: 16px; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="logo">⚡ TeleVault</div>
-    <h1 class="heading">Verify your email address</h1>
-    <p class="text">Hello <strong>${fullName || 'User'}</strong>,</p>
-    <p class="text">Thank you for joining TeleVault. Use the verification code below to verify your account:</p>
-    <div class="otp-box">
-      <div class="otp-code">${otp}</div>
-    </div>
-    <p class="text">This code will expire in <strong>10 minutes</strong>. If you did not request this, you can safely ignore this email.</p>
-    <div class="footer">
-      Regards,<br>
-      <strong>TeleVault Security Team</strong>
-    </div>
-  </div>
-</body>
-</html>
-`;
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #070c0e; color: #f1f7f5; margin: 0; padding: 24px; }
+        .card { background-color: #0e1619; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; max-width: 480px; margin: 0 auto; padding: 32px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .brand { font-size: 22px; font-weight: 800; color: #d7e87e; text-decoration: none; display: inline-block; margin-bottom: 24px; }
+        .title { font-size: 20px; font-weight: 700; color: #f1f7f5; margin-top: 0; margin-bottom: 12px; }
+        .text { font-size: 15px; color: #9cb5ad; line-height: 1.6; margin-bottom: 24px; }
+        .otp-container { background: linear-gradient(135deg, rgba(215, 232, 126, 0.1) 0%, rgba(13, 148, 136, 0.15) 100%); border: 1.5px dashed rgba(215, 232, 126, 0.4); border-radius: 12px; padding: 18px; text-align: center; margin-bottom: 24px; }
+        .otp-code { font-family: monospace, Courier; font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #d7e87e; margin: 0; }
+        .footer { font-size: 12px; color: #6d8a81; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 18px; margin-top: 24px; text-align: center; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="brand">TeleVault</div>
+        <h1 class="title">Verify your email address</h1>
+        <p class="text">Hi <strong>${fullName || 'there'}</strong>,<br><br>Thank you for creating a TeleVault account. Use the 6-digit verification code below to activate your account and unlock your private digital vault:</p>
+        
+        <div class="otp-container">
+          <p class="otp-code">${otp}</p>
+        </div>
+
+        <p class="text" style="font-size: 13px;">This code is valid for <strong>10 minutes</strong>. If you did not request this email, please safely ignore it.</p>
+        
+        <div class="footer">
+          TeleVault Cloud Storage · Private & Encrypted Vault
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
 
   await transporter.sendMail({
     from: config.email.from,
     to: email,
-    subject,
-    text: textContent,
+    subject: `Your TeleVault Verification Code: ${otp}`,
+    text: `Hi ${fullName || 'there'},\n\nYour TeleVault verification code is: ${otp}\n\nThis code will expire in 10 minutes.\n\n— TeleVault`,
     html: htmlContent,
   });
 };

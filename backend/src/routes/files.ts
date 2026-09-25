@@ -142,8 +142,12 @@ router.post('/upload', upload.array('files', 10), async (req, res, next) => {
 // 4. GET FILE DETAILS
 router.get('/:id', async (req, res, next) => {
   try {
-    if (!isObjectId(req.params.id)) return failure(res, 'File not found.', 404);
-    const file = await FileModel.findOne({ _id: req.params.id, userId: req.userId });
+    const userId = req.userId;
+    if (!isObjectId(req.params.id) || !userId || !isObjectId(userId)) return failure(res, 'File not found.', 404);
+    const file = await FileModel.findOne({
+      _id: new mongoose.Types.ObjectId(req.params.id),
+      userId: new mongoose.Types.ObjectId(userId),
+    });
     if (!file) return failure(res, 'File not found.', 404);
     return success(res, { file: publicFile(file) });
   } catch (error) {
@@ -154,8 +158,12 @@ router.get('/:id', async (req, res, next) => {
 // 5. DOWNLOAD FILE
 router.get('/:id/download', async (req, res, next) => {
   try {
-    if (!isObjectId(req.params.id)) return failure(res, 'File not found.', 404);
-    const file = await FileModel.findOne({ _id: req.params.id, userId: req.userId });
+    const userId = req.userId;
+    if (!isObjectId(req.params.id) || !userId || !isObjectId(userId)) return failure(res, 'File not found.', 404);
+    const file = await FileModel.findOne({
+      _id: new mongoose.Types.ObjectId(req.params.id),
+      userId: new mongoose.Types.ObjectId(userId),
+    });
     if (!file) return failure(res, 'File not found.', 404);
 
     const remote = await downloadFromTelegram(file.telegramFileId);
@@ -170,8 +178,12 @@ router.get('/:id/download', async (req, res, next) => {
 // 6. DELETE FILE
 router.delete('/:id', async (req, res, next) => {
   try {
-    if (!isObjectId(req.params.id)) return failure(res, 'File not found.', 404);
-    const file = await FileModel.findOne({ _id: req.params.id, userId: req.userId });
+    const userId = req.userId;
+    if (!isObjectId(req.params.id) || !userId || !isObjectId(userId)) return failure(res, 'File not found.', 404);
+    const file = await FileModel.findOne({
+      _id: new mongoose.Types.ObjectId(req.params.id),
+      userId: new mongoose.Types.ObjectId(userId),
+    });
     if (!file) return failure(res, 'File not found.', 404);
 
     await deleteTelegramMessage(Number(file.telegramMessageId));
