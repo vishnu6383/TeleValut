@@ -138,7 +138,7 @@ export default function LoginPage() {
 
             <p style={{ fontSize: '1.05rem', lineHeight: 1.6, color: '#cbe0d9' }}>
               Welcome back to your private vault. Access your personal media gallery, documents, and
-              archived files with infinite Telegram-backed cloud storage.
+              archived files with secure high-speed cloud storage.
             </p>
           </div>
         </div>
@@ -149,7 +149,7 @@ export default function LoginPage() {
             <div style={{ background: 'rgba(215, 232, 126, 0.15)', padding: '0.4rem', borderRadius: '0.5rem', color: 'var(--lime)' }}>
               <Cloud size={18} />
             </div>
-            <span>Encrypted cloud streaming directly from Telegram Bot API</span>
+            <span>Encrypted cloud streaming with zero file compression</span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#e0ece8', fontSize: '0.9rem' }}>

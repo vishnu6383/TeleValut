@@ -194,8 +194,8 @@ export default function RegisterPage() {
             </h1>
 
             <p style={{ fontSize: '1.05rem', lineHeight: 1.6, color: '#cbe0d9' }}>
-              Create your account to start streaming unlimited photos, documents, and media
-              securely to your own private Telegram channel.
+              Create your account to start storing and streaming unlimited photos, documents, and media
+              securely in your private cloud vault.
             </p>
           </div>
         </div>
@@ -213,7 +213,7 @@ export default function RegisterPage() {
             <div style={{ background: 'rgba(215, 232, 126, 0.15)', padding: '0.4rem', borderRadius: '0.5rem', color: 'var(--lime)' }}>
               <Cloud size={18} />
             </div>
-            <span>Stream directly to your private, isolated Telegram cloud channel</span>
+            <span>Stream directly to your private, encrypted cloud vault</span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#e0ece8', fontSize: '0.9rem' }}>

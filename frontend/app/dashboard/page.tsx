@@ -1634,7 +1634,7 @@ export default function DashboardPage() {
 
             <p className="muted" style={{ fontSize: '0.85rem', marginBottom: '1.25rem' }}>
               {uploadProgressState === 'syncing'
-                ? 'Streaming encrypted media to Telegram Bot cloud'
+                ? 'Securing and encrypting files to your cloud vault'
                 : uploadFileNames.slice(0, 2).join(', ') + (uploadFileNames.length > 2 ? ` and ${uploadFileNames.length - 2} more` : '')}
             </p>
 

@@ -16,7 +16,7 @@ const spaceGrotesk = Space_Grotesk({
 
 export const metadata: Metadata = {
   title: 'TeleVault — Your Private Digital Vault',
-  description: 'Private, secure cloud storage powered by your personal Telegram channel. Unlimited, encrypted, and accessible anywhere.',
+  description: 'Private, secure cloud storage for your photos, media, and documents. Unlimited, encrypted, and accessible anywhere.',
 };
 
 export const viewport: Viewport = {
