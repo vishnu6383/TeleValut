@@ -46,6 +46,10 @@ const sendOtp = async (user: IUser) => {
   user.lastOtpSentAt = new Date();
   await user.save();
 
+  console.log('====================================================');
+  console.log(`[TeleVault Security OTP] Email: ${user.email} -> CODE: ${otp}`);
+  console.log('====================================================');
+
   await sendVerificationOTP(user.email, user.fullName, otp);
 };
 

@@ -1,49 +1,45 @@
-import dns from 'node:dns';
 import nodemailer from 'nodemailer';
 import { config } from '../config';
 
-// Force global Node.js DNS resolution order to IPv4 first
-if (typeof dns.setDefaultResultOrder === 'function') {
-  dns.setDefaultResultOrder('ipv4first');
-}
-
-// Strict IPv4 lookup resolver to prevent 'connect ENETUNREACH' on IPv4-only cloud platforms (Render, Docker, AWS)
-const lookupIpv4Only: any = (hostname: string, options: any, callback: any) => {
-  const cb = typeof options === 'function' ? options : callback;
-  dns.lookup(hostname, { family: 4, all: false }, (err, address, family) => {
-    if (err) {
-      dns.resolve4(hostname, (rErr, addresses) => {
-        if (rErr || !addresses || !addresses.length) {
-          return cb(err || rErr);
-        }
-        return cb(null, addresses[0], 4);
-      });
-      return;
-    }
-    cb(null, address, family);
-  });
-};
-
 const createTransporter = () => {
-  if (!config.email.host || !config.email.user || !config.email.password) {
+  if (!config.email.user || !config.email.password) {
     return null;
   }
+
+  const cleanPass = config.email.password.trim().replace(/\s+/g, '');
+  const cleanUser = config.email.user.trim();
+  const isGmail =
+    config.email.host?.toLowerCase().includes('gmail') ||
+    cleanUser.toLowerCase().endsWith('@gmail.com');
+
+  if (isGmail) {
+    // Official Nodemailer Gmail service preset (bypasses ISP port 587 blocks and handles SSL automatically)
+    return nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: cleanUser,
+        pass: cleanPass,
+      },
+      tls: {
+        rejectUnauthorized: false,
+      },
+    });
+  }
+
   return nodemailer.createTransport({
     host: config.email.host,
-    port: config.email.port,
+    port: config.email.port || 587,
     secure: config.email.port === 465,
-    lookup: lookupIpv4Only,
     auth: {
-      user: config.email.user,
-      pass: config.email.password,
+      user: cleanUser,
+      pass: cleanPass,
     },
     tls: {
       rejectUnauthorized: false,
-      servername: config.email.host,
     },
-    connectionTimeout: 15000,
-    greetingTimeout: 15000,
-    socketTimeout: 20000,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
   } as any);
 };
 
@@ -56,7 +52,7 @@ export const verifySmtpConnection = async (): Promise<{ ok: boolean; error?: str
   if (!transporter) {
     return {
       ok: false,
-      error: 'SMTP credentials missing. Please set EMAIL_HOST, EMAIL_PORT, EMAIL_USER, and EMAIL_PASSWORD in .env',
+      error: 'SMTP credentials missing. Please set EMAIL_USER and EMAIL_PASSWORD in .env',
     };
   }
   try {
@@ -80,7 +76,7 @@ export const sendVerificationOTP = async (
 ): Promise<void> => {
   if (!transporter) {
     throw new Error(
-      'Email service is not configured. Please provide EMAIL_HOST, EMAIL_PORT, EMAIL_USER, and EMAIL_PASSWORD.'
+      'Email service is not configured. Please provide EMAIL_USER and EMAIL_PASSWORD in .env.'
     );
   }
 
@@ -121,7 +117,7 @@ export const sendVerificationOTP = async (
   `;
 
   await transporter.sendMail({
-    from: config.email.from,
+    from: config.email.from || `TeleVault <${config.email.user}>`,
     to: email,
     subject: `Your TeleVault Verification Code: ${otp}`,
     text: `Hi ${fullName || 'there'},\n\nYour TeleVault verification code is: ${otp}\n\nThis code will expire in 10 minutes.\n\n— TeleVault`,
