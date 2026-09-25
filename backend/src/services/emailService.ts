@@ -2,10 +2,27 @@ import dns from 'node:dns';
 import nodemailer from 'nodemailer';
 import { config } from '../config';
 
-// Force IPv4 lookup priority across Node runtime
+// Force global Node.js DNS resolution order to IPv4 first
 if (typeof dns.setDefaultResultOrder === 'function') {
   dns.setDefaultResultOrder('ipv4first');
 }
+
+// Strict IPv4 lookup resolver to prevent 'connect ENETUNREACH' on IPv4-only cloud platforms (Render, Docker, AWS)
+const lookupIpv4Only: any = (hostname: string, options: any, callback: any) => {
+  const cb = typeof options === 'function' ? options : callback;
+  dns.lookup(hostname, { family: 4, all: false }, (err, address, family) => {
+    if (err) {
+      dns.resolve4(hostname, (rErr, addresses) => {
+        if (rErr || !addresses || !addresses.length) {
+          return cb(err || rErr);
+        }
+        return cb(null, addresses[0], 4);
+      });
+      return;
+    }
+    cb(null, address, family);
+  });
+};
 
 const createTransporter = () => {
   if (!config.email.host || !config.email.user || !config.email.password) {
@@ -15,13 +32,14 @@ const createTransporter = () => {
     host: config.email.host,
     port: config.email.port,
     secure: config.email.port === 465,
-    family: 4,
+    lookup: lookupIpv4Only,
     auth: {
       user: config.email.user,
       pass: config.email.password,
     },
     tls: {
       rejectUnauthorized: false,
+      servername: config.email.host,
     },
     connectionTimeout: 15000,
     greetingTimeout: 15000,
