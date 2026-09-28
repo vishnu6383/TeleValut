@@ -34,6 +34,7 @@ const sendViaResend = async (
   text: string
 ): Promise<{ ok: boolean; error?: string }> => {
   try {
+    const fromAddress = process.env.RESEND_FROM?.trim() || 'TeleVault <onboarding@resend.dev>';
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -41,7 +42,7 @@ const sendViaResend = async (
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'TeleVault <onboarding@resend.dev>',
+        from: fromAddress,
         to: [to],
         subject,
         html,
@@ -50,7 +51,7 @@ const sendViaResend = async (
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      return { ok: false, error: data?.message || `Resend failed with status ${res.status}` };
+      return { ok: false, error: data?.message || data?.error || `Resend failed with status ${res.status}` };
     }
     return { ok: true };
   } catch (err: any) {
@@ -186,6 +187,7 @@ export const sendVerificationOTP = async (
       return;
     }
     console.error(`[TeleVault Email] Resend API error: ${resendResult.error}`);
+    throw new Error(`Email Delivery Failed: ${resendResult.error}`);
   }
 
   // 2. Try Brevo HTTPS API (Port 443 - Works seamlessly on Render)
