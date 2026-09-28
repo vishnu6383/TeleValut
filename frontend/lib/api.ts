@@ -2,23 +2,56 @@ const rawApi = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 const cleanApi = rawApi.trim().replace(/\/+$/, '');
 const API = cleanApi.endsWith('/api') ? cleanApi : `${cleanApi}/api`;
 
+export function getAuthToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('televault_token');
+}
+
+export function setAuthToken(token: string): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('televault_token', token);
+}
+
+export function clearAuthToken(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem('televault_token');
+}
+
+export function getFileUrl(fileId: string): string {
+  const token = getAuthToken();
+  return token
+    ? `${API}/files/${fileId}/download?token=${encodeURIComponent(token)}`
+    : `${API}/files/${fileId}/download`;
+}
+
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
   const fullUrl = `${API}${cleanPath}`;
+  const token = getAuthToken();
 
   try {
+    const customHeaders = (options.headers as Record<string, string>) || {};
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...customHeaders,
+    };
+
     const response = await fetch(fullUrl, {
       ...options,
       credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(options.headers ?? {}),
-      },
+      headers,
     });
 
     const body = await response.json().catch(() => ({}));
 
     if (!response.ok) {
+      if (response.status === 401 && typeof window !== 'undefined') {
+        // If not checking auth endpoint, clean expired token
+        if (!cleanPath.includes('/auth/me')) {
+          clearAuthToken();
+        }
+      }
       throw new Error(body.message || body.error || `Request failed with status ${response.status}`);
     }
 

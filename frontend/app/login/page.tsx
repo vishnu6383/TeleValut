@@ -17,7 +17,7 @@ import {
   Sun,
   Moon,
 } from 'lucide-react';
-import { api } from '../../lib/api';
+import { api, setAuthToken } from '../../lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -64,10 +64,13 @@ export default function LoginPage() {
     setError('');
 
     try {
-      await api('/auth/login', {
+      const data = await api<{ user: { id: string; username: string; email: string; fullName: string }; token?: string }>('/auth/login', {
         method: 'POST',
         body: JSON.stringify({ identifier: identifier.trim(), password }),
       });
+      if (data?.token) {
+        setAuthToken(data.token);
+      }
       router.push('/dashboard');
     } catch (err) {
       setError((err as Error).message || 'Invalid email/username or password.');

@@ -31,7 +31,7 @@ import {
   CheckCircle2,
   User as UserIcon,
 } from 'lucide-react';
-import { api, apiBase } from '../../lib/api';
+import { api, apiBase, getFileUrl } from '../../lib/api';
 
 type User = {
   fullName: string;
@@ -204,10 +204,12 @@ export default function DashboardPage() {
         setUploadProgressState('syncing');
       }, 700);
 
+      const token = typeof window !== 'undefined' ? localStorage.getItem('televault_token') : null;
       const response = await fetch(`${apiBase}/files/upload`, {
         method: 'POST',
         body: formData,
         credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.message || 'Upload failed.');
@@ -303,7 +305,7 @@ export default function DashboardPage() {
     for (let i = 0; i < ids.length; i++) {
       const id = ids[i];
       const link = document.createElement('a');
-      link.href = `${apiBase}/files/${id}/download`;
+      link.href = getFileUrl(id);
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
       document.body.appendChild(link);
@@ -885,7 +887,7 @@ export default function DashboardPage() {
                           {isImg ? (
                             <img
                               className="gallery-thumbnail"
-                              src={`${apiBase}/files/${file._id}/download`}
+                              src={getFileUrl(file._id)}
                               alt={file.originalName}
                               loading="lazy"
                             />
@@ -909,7 +911,7 @@ export default function DashboardPage() {
                           <div className="file-actions">
                             <a
                               className="file-action-btn"
-                              href={`${apiBase}/files/${file._id}/download`}
+                              href={getFileUrl(file._id)}
                               target="_blank"
                               title="Download"
                             >
@@ -1097,7 +1099,7 @@ export default function DashboardPage() {
                         >
                           <img
                             className="gallery-thumbnail"
-                            src={`${apiBase}/files/${file._id}/download`}
+                            src={getFileUrl(file._id)}
                             alt={file.originalName}
                             loading="lazy"
                           />
@@ -1129,7 +1131,7 @@ export default function DashboardPage() {
                           <div className="file-actions">
                             <a
                               className="file-action-btn"
-                              href={`${apiBase}/files/${file._id}/download`}
+                              href={getFileUrl(file._id)}
                               target="_blank"
                               title="Download"
                             >
@@ -1374,7 +1376,7 @@ export default function DashboardPage() {
                                 >
                                   {isImg ? (
                                     <img
-                                      src={`${apiBase}/files/${file._id}/download`}
+                                      src={getFileUrl(file._id)}
                                       alt={file.originalName}
                                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                     />
@@ -1413,7 +1415,7 @@ export default function DashboardPage() {
                               <div style={{ display: 'inline-flex', gap: '0.4rem' }}>
                                 <a
                                   className="file-action-btn"
-                                  href={`${apiBase}/files/${file._id}/download`}
+                                  href={getFileUrl(file._id)}
                                   target="_blank"
                                   title="Download"
                                   style={{ padding: '0.35rem 0.75rem' }}
@@ -1470,7 +1472,7 @@ export default function DashboardPage() {
                           >
                             {isImg ? (
                               <img
-                                src={`${apiBase}/files/${file._id}/download`}
+                                src={getFileUrl(file._id)}
                                 alt={file.originalName}
                                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                               />
@@ -1491,7 +1493,7 @@ export default function DashboardPage() {
                         <div style={{ display: 'flex', gap: '0.4rem', borderTop: '1px solid var(--border-subtle)', paddingTop: '0.5rem' }}>
                           <a
                             className="file-action-btn"
-                            href={`${apiBase}/files/${file._id}/download`}
+                            href={getFileUrl(file._id)}
                             target="_blank"
                             title="Download"
                           >
@@ -1673,7 +1675,7 @@ export default function DashboardPage() {
             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexShrink: 0 }}>
               <a
                 className="primary"
-                href={`${apiBase}/files/${lightboxFile._id}/download`}
+                href={getFileUrl(lightboxFile._id)}
                 target="_blank"
                 style={{ textDecoration: 'none', padding: '0.45rem 0.95rem', fontSize: '0.84rem', minHeight: 'auto' }}
               >
@@ -1694,7 +1696,7 @@ export default function DashboardPage() {
           <div className="lightbox-content">
             <img
               className="lightbox-img"
-              src={`${apiBase}/files/${lightboxFile._id}/download`}
+              src={getFileUrl(lightboxFile._id)}
               alt={lightboxFile.originalName}
               onClick={(e) => e.stopPropagation()}
             />

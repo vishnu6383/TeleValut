@@ -19,7 +19,7 @@ const publicUser = (user: IUser) => ({
   email: user.email,
 });
 
-const issueCookie = (res: import('express').Response, userId: string) => {
+const issueCookie = (res: import('express').Response, userId: string): string => {
   const token = jwt.sign({ sub: userId }, config.jwtSecret, {
     expiresIn: config.jwtExpiresIn as jwt.SignOptions['expiresIn'],
   });
@@ -30,6 +30,7 @@ const issueCookie = (res: import('express').Response, userId: string) => {
     secure: isProd,
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
+  return token;
 };
 
 /**
@@ -244,8 +245,8 @@ router.post('/login', async (req, res, next) => {
       return failure(res, 'Please verify your email before logging in.', 403);
     }
 
-    issueCookie(res, user._id.toString());
-    return success(res, { user: publicUser(user) }, 'Logged in.');
+    const token = issueCookie(res, user._id.toString());
+    return success(res, { user: publicUser(user), token }, 'Logged in.');
   } catch (error) {
     return next(error);
   }
