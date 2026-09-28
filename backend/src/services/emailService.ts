@@ -99,14 +99,14 @@ const sendViaBrevo = async (
  * Verifies email service connectivity.
  */
 export const verifySmtpConnection = async (): Promise<{ ok: boolean; provider: string; error?: string }> => {
+  const brevoKey = process.env.BREVO_API_KEY?.trim();
+  if (brevoKey) {
+    return { ok: true, provider: 'Brevo HTTPS API (Port 443 - All Recipients)' };
+  }
+
   const resendKey = process.env.RESEND_API_KEY?.trim();
   if (resendKey) {
     return { ok: true, provider: 'Resend HTTPS API (Port 443)' };
-  }
-
-  const brevoKey = process.env.BREVO_API_KEY?.trim();
-  if (brevoKey) {
-    return { ok: true, provider: 'Brevo HTTPS API (Port 443)' };
   }
 
   const transporter = getTransporter();
@@ -178,19 +178,7 @@ export const sendVerificationOTP = async (
   const textContent = `Hi ${fullName || 'there'},\n\nYour TeleVault verification code is: ${otp}\n\nThis code will expire in 10 minutes.\n\n— TeleVault`;
   const subject = `Your TeleVault Verification Code: ${otp}`;
 
-  // 1. Try Resend HTTPS API (Port 443 - Works seamlessly on Render)
-  const resendKey = process.env.RESEND_API_KEY?.trim();
-  if (resendKey) {
-    const resendResult = await sendViaResend(resendKey, email, subject, htmlContent, textContent);
-    if (resendResult.ok) {
-      console.log(`[TeleVault Email] Successfully dispatched OTP email to ${email} via Resend HTTPS.`);
-      return;
-    }
-    console.error(`[TeleVault Email] Resend API error: ${resendResult.error}`);
-    throw new Error(`Email Delivery Failed: ${resendResult.error}`);
-  }
-
-  // 2. Try Brevo HTTPS API (Port 443 - Works seamlessly on Render)
+  // 1. Try Brevo HTTPS API (Port 443 - Works for ALL recipients on Render)
   const brevoKey = process.env.BREVO_API_KEY?.trim();
   const senderEmail = config.email.user?.trim() || process.env.EMAIL_USER?.trim() || 'vishnunaveenkumar27@gmail.com';
   if (brevoKey) {
@@ -201,6 +189,18 @@ export const sendVerificationOTP = async (
     }
     console.error(`[TeleVault Email] Brevo API error: ${brevoResult.error}`);
     throw new Error(`Email Delivery Failed: ${brevoResult.error}`);
+  }
+
+  // 2. Try Resend HTTPS API (Port 443 - Works seamlessly on Render)
+  const resendKey = process.env.RESEND_API_KEY?.trim();
+  if (resendKey) {
+    const resendResult = await sendViaResend(resendKey, email, subject, htmlContent, textContent);
+    if (resendResult.ok) {
+      console.log(`[TeleVault Email] Successfully dispatched OTP email to ${email} via Resend HTTPS.`);
+      return;
+    }
+    console.error(`[TeleVault Email] Resend API error: ${resendResult.error}`);
+    throw new Error(`Email Delivery Failed: ${resendResult.error}`);
   }
 
   // 3. Try Direct SMTP / Gmail
