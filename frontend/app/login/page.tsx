@@ -16,6 +16,10 @@ import {
   AlertCircle,
   Sun,
   Moon,
+  Check,
+  AlertTriangle,
+  ShieldAlert,
+  X,
 } from 'lucide-react';
 import { api, setAuthToken } from '../../lib/api';
 
@@ -28,6 +32,12 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+
+  // Terms & Risk Declaration state
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [hasReadTerms, setHasReadTerms] = useState(false);
+  const [termsModalOpen, setTermsModalOpen] = useState(false);
+  const [termsTouchedWarning, setTermsTouchedWarning] = useState(false);
 
   // Load and toggle theme
   useEffect(() => {
@@ -60,6 +70,13 @@ export default function LoginPage() {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!termsAccepted) {
+      setError('Please read and agree to the Terms & Risk Declaration before signing in.');
+      setTermsTouchedWarning(true);
+      setTermsModalOpen(true);
+      return;
+    }
+
     setLoading(true);
     setError('');
 
@@ -268,6 +285,60 @@ export default function LoginPage() {
             </div>
           </div>
 
+          {/* Terms & Risk Declaration Checkbox (Mandatory before sign in) */}
+          <div
+            className={`terms-checkbox-wrap ${termsAccepted ? 'checked' : ''}`}
+            onClick={(e) => {
+              e.preventDefault();
+              if (!hasReadTerms) {
+                setTermsTouchedWarning(true);
+                setTermsModalOpen(true);
+                return;
+              }
+              setTermsAccepted(!termsAccepted);
+            }}
+            role="checkbox"
+            aria-checked={termsAccepted}
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === ' ' || e.key === 'Enter') {
+                e.preventDefault();
+                if (!hasReadTerms) {
+                  setTermsTouchedWarning(true);
+                  setTermsModalOpen(true);
+                  return;
+                }
+                setTermsAccepted(!termsAccepted);
+              }
+            }}
+          >
+            <div className="custom-checkbox">
+              {termsAccepted && <Check size={13} strokeWidth={3.5} />}
+            </div>
+            <div style={{ flex: 1 }}>
+              <p className="terms-label" style={{ margin: 0 }}>
+                I have read and agree to the{' '}
+                <button
+                  type="button"
+                  className="terms-link-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setTermsModalOpen(true);
+                  }}
+                >
+                  Terms &amp; Risk Declaration
+                </button>
+                . <span style={{ opacity: 0.85 }}>(Use at your own risk)</span>
+              </p>
+              {!hasReadTerms && termsTouchedWarning && (
+                <p className="terms-hint">
+                  <AlertTriangle size={13} />
+                  <span>Click to review and accept the declaration first.</span>
+                </p>
+              )}
+            </div>
+          </div>
+
           {error && (
             <div className="error-box">
               <AlertCircle size={17} style={{ flexShrink: 0 }} />
@@ -291,7 +362,8 @@ export default function LoginPage() {
           <button
             className="primary"
             style={{ width: '100%', marginTop: '1.4rem' }}
-            disabled={loading || !identifier || !password}
+            disabled={loading || !identifier || !password || !termsAccepted}
+            title={!termsAccepted ? 'Please read and accept the Terms & Risk Declaration to sign in' : undefined}
           >
             {loading ? (
               <>Signing in...</>
@@ -310,6 +382,103 @@ export default function LoginPage() {
           </p>
         </form>
       </section>
+
+      {/* IMPORTANT TERMS & RISK DECLARATION MODAL */}
+      {termsModalOpen && (
+        <div className="declaration-modal-overlay" onClick={() => setTermsModalOpen(false)}>
+          <div className="declaration-modal-card" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="terms-title">
+            <div className="declaration-modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <div className="declaration-modal-icon">
+                  <ShieldAlert size={22} />
+                </div>
+                <div>
+                  <h3 id="terms-title" className="font-display" style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>
+                    Terms of Use &amp; Risk Declaration
+                  </h3>
+                  <p className="muted" style={{ margin: 0, fontSize: '0.78rem' }}>
+                    Mandatory reading before accessing TeleVault services
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setTermsModalOpen(false)}
+                style={{ padding: '0.35rem 0.55rem' }}
+                aria-label="Close Terms"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="declaration-modal-body">
+              <div className="declaration-callout">
+                <AlertTriangle size={20} className="text-amber-400" style={{ flexShrink: 0, marginTop: '2px' }} />
+                <div>
+                  <strong style={{ fontSize: '0.92rem' }}>USE AT YOUR OWN RISK</strong>
+                  <p style={{ margin: '0.25rem 0 0', fontSize: '0.84rem', lineHeight: 1.45 }}>
+                    TeleVault is provided strictly on an &quot;as-is&quot; and &quot;as-available&quot; basis. By checking the agreement and signing in, you acknowledge that you assume full responsibility for all content and files stored in your account.
+                  </p>
+                </div>
+              </div>
+
+              <div className="declaration-sections">
+                <div className="declaration-item">
+                  <h4>1. Third-Party Infrastructure Notice</h4>
+                  <p>
+                    TeleVault routes and stores binary payloads utilizing Telegram&apos;s Bot &amp; Cloud API infrastructure. TeleVault is an independent project and is not affiliated with, endorsed by, or sponsored by Telegram FZ-LLC. File availability, bandwidth limits, and retention periods are subject to Telegram&apos;s API policies and Terms of Service.
+                  </p>
+                </div>
+
+                <div className="declaration-item">
+                  <h4>2. Personal &amp; Demonstration Usage Only</h4>
+                  <p>
+                    This service is designed for personal file management and technical demonstration. Do not treat TeleVault as your single or primary backup for mission-critical, unrecoverable, or legally essential records. Always maintain independent backups of vital documents.
+                  </p>
+                </div>
+
+                <div className="declaration-item">
+                  <h4>3. Prohibited &amp; Restricted Content</h4>
+                  <p>
+                    You strictly agree <strong>NOT</strong> to store or transmit:
+                  </p>
+                  <ul>
+                    <li>Unencrypted passwords, security recovery keys, or financial credentials</li>
+                    <li>Protected health records or sensitive government-issued ID numbers</li>
+                    <li>Copyrighted materials intended for unauthorized public dissemination</li>
+                    <li>Any illicit, abusive, defamatory, or unlawful digital media</li>
+                  </ul>
+                </div>
+
+                <div className="declaration-item">
+                  <h4>4. Limitation of Liability</h4>
+                  <p>
+                    Under no circumstances shall the maintainers, developers, or hosting providers of TeleVault be held liable for data loss, service interruption, file corruption, third-party API restrictions, or unauthorized access resulting from lost or compromised user credentials.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="declaration-modal-footer">
+              <button
+                type="button"
+                className="primary"
+                style={{ width: '100%', justifyContent: 'center', minHeight: '2.75rem' }}
+                onClick={() => {
+                  setHasReadTerms(true);
+                  setTermsAccepted(true);
+                  setTermsTouchedWarning(false);
+                  setTermsModalOpen(false);
+                }}
+              >
+                <CheckCircle2 size={16} />
+                <span>I Have Read, Understood &amp; Agree to All Terms</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
