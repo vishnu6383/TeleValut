@@ -200,6 +200,7 @@ export const sendVerificationOTP = async (
       return;
     }
     console.error(`[TeleVault Email] Brevo API error: ${brevoResult.error}`);
+    throw new Error(`Email Delivery Failed: ${brevoResult.error}`);
   }
 
   // 3. Try Direct SMTP / Gmail
