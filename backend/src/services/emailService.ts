@@ -2,12 +2,8 @@ import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 import { config } from '../config';
 
-let cachedTransporter: Transporter | null = null;
-
 const getTransporter = (): Transporter | null => {
-  if (cachedTransporter) return cachedTransporter;
-
-  const user = config.email.user?.trim() || process.env.EMAIL_USER?.trim();
+  const user = config.email.user?.trim() || process.env.EMAIL_USER?.trim() || '';
   const rawPass = config.email.password || process.env.EMAIL_PASSWORD || '';
   const pass = rawPass.trim().replace(/\s+/g, '');
 
@@ -15,33 +11,15 @@ const getTransporter = (): Transporter | null => {
     return null;
   }
 
-  const host = config.email.host?.trim() || process.env.EMAIL_HOST?.trim() || '';
+  const host = config.email.host?.trim() || process.env.EMAIL_HOST?.trim() || 'smtp.gmail.com';
+  const port = Number(config.email.port || process.env.EMAIL_PORT || 465);
   const isGmail = host.toLowerCase().includes('gmail') || user.toLowerCase().endsWith('@gmail.com');
 
   if (isGmail) {
-    // High-speed direct SSL pool on port 465 for Gmail (bypasses slow STARTTLS 587 handshake)
-    cachedTransporter = nodemailer.createTransport({
+    return nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 465,
       secure: true,
-      pool: true,
-      maxConnections: 5,
-      maxMessages: 100,
-      auth: { user, pass },
-      tls: { rejectUnauthorized: false },
-      connectionTimeout: 8000,
-      greetingTimeout: 8000,
-      socketTimeout: 10000,
-    });
-  } else {
-    const port = Number(config.email.port || process.env.EMAIL_PORT || 587);
-    cachedTransporter = nodemailer.createTransport({
-      host: host || 'smtp.gmail.com',
-      port,
-      secure: port === 465,
-      pool: true,
-      maxConnections: 5,
-      maxMessages: 100,
       auth: { user, pass },
       tls: { rejectUnauthorized: false },
       connectionTimeout: 8000,
@@ -50,7 +28,16 @@ const getTransporter = (): Transporter | null => {
     });
   }
 
-  return cachedTransporter;
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure: port === 465,
+    auth: { user, pass },
+    tls: { rejectUnauthorized: false },
+    connectionTimeout: 8000,
+    greetingTimeout: 8000,
+    socketTimeout: 10000,
+  });
 };
 
 /**
