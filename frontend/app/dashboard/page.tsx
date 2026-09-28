@@ -30,6 +30,8 @@ import {
   CloudUpload,
   CheckCircle2,
   User as UserIcon,
+  AlertTriangle,
+  ShieldAlert,
 } from 'lucide-react';
 import { api, apiBase, getFileUrl } from '../../lib/api';
 
@@ -126,11 +128,18 @@ export default function DashboardPage() {
   // Toasts
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  // Initialize theme
+  // Declaration notice & modal
+  const [declarationModalOpen, setDeclarationModalOpen] = useState(false);
+  const [declarationBannerDismissed, setDeclarationBannerDismissed] = useState(false);
+
+  // Initialize theme & declaration status
   useEffect(() => {
     const savedTheme = (localStorage.getItem('televault_theme') as 'dark' | 'light') || 'dark';
     setTheme(savedTheme);
     document.documentElement.setAttribute('data-theme', savedTheme);
+
+    const dismissed = localStorage.getItem('televault_declaration_dismissed') === 'true';
+    setDeclarationBannerDismissed(dismissed);
   }, []);
 
   const toggleTheme = () => {
@@ -531,6 +540,20 @@ export default function DashboardPage() {
               </div>
               <span style={{ fontSize: '0.8rem', fontWeight: 800, opacity: 0.8 }}>{stats.total}</span>
             </button>
+
+            <button
+              className="nav-item"
+              onClick={() => {
+                setDeclarationModalOpen(true);
+                setMobileMenuOpen(false);
+              }}
+              style={{ border: '1px dashed rgba(245, 158, 11, 0.4)', background: 'rgba(245, 158, 11, 0.08)', marginTop: '0.5rem' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', color: '#f59e0b' }}>
+                <AlertTriangle size={18} />
+                <span style={{ fontWeight: 700 }}>Security Declaration</span>
+              </div>
+            </button>
           </nav>
 
           {/* MOBILE LOGOUT BUTTON IN DRAWER */}
@@ -694,6 +717,32 @@ export default function DashboardPage() {
           </button>
         </nav>
 
+        {/* Declaration Notice Button in Sidebar */}
+        <div style={{ marginTop: 'auto', marginBottom: '0.85rem' }}>
+          <button
+            type="button"
+            onClick={() => setDeclarationModalOpen(true)}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.55rem',
+              padding: '0.55rem 0.75rem',
+              background: 'rgba(245, 158, 11, 0.08)',
+              border: '1px solid rgba(245, 158, 11, 0.25)',
+              borderRadius: '0.65rem',
+              color: '#f59e0b',
+              fontSize: '0.78rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <AlertTriangle size={15} style={{ flexShrink: 0 }} />
+            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Security Declaration</span>
+          </button>
+        </div>
+
         {/* User Badge */}
         <div className="user-profile-badge">
           <div className="user-avatar">{user?.fullName ? user.fullName[0].toUpperCase() : 'U'}</div>
@@ -719,6 +768,45 @@ export default function DashboardPage() {
 
       {/* MAIN VAULT AREA */}
       <main className="main">
+        {/* IMPORTANT DECLARATION BANNER (POST-LOGIN ONLY) */}
+        {!declarationBannerDismissed && (
+          <aside className="declaration-banner" role="region" aria-label="Security and Usage Declaration">
+            <div className="declaration-banner-icon">
+              <AlertTriangle size={20} />
+            </div>
+            <div className="declaration-banner-content">
+              <div className="declaration-banner-title">
+                <span>Important Declaration: Use At Your Own Risk</span>
+                <span className="declaration-badge">Security Notice</span>
+              </div>
+              <p className="declaration-banner-text">
+                TeleVault is a personal cloud storage utility using Telegram API infrastructure for storage demonstration.
+                <strong> Please use this platform strictly at your own risk.</strong> Do not upload sensitive passwords, private credentials, unencrypted financial records, or restricted materials.
+              </p>
+            </div>
+            <div className="declaration-banner-actions">
+              <button
+                className="declaration-btn-primary"
+                onClick={() => setDeclarationModalOpen(true)}
+              >
+                <ShieldAlert size={14} />
+                <span>Full Declaration</span>
+              </button>
+              <button
+                className="declaration-btn-dismiss"
+                onClick={() => {
+                  setDeclarationBannerDismissed(true);
+                  localStorage.setItem('televault_declaration_dismissed', 'true');
+                }}
+                title="Dismiss declaration announcement"
+                aria-label="Dismiss declaration announcement"
+              >
+                <X size={15} />
+              </button>
+            </div>
+          </aside>
+        )}
+
         {/* ============================================================
             1. DASHBOARD OVERVIEW TAB
             (Welcome, 4 Storage Statistics cards ONLY HERE, Dropzone, Recent Files)
@@ -1700,6 +1788,100 @@ export default function DashboardPage() {
               alt={lightboxFile.originalName}
               onClick={(e) => e.stopPropagation()}
             />
+          </div>
+        </div>
+      )}
+
+      {/* IMPORTANT DECLARATION & DISCLAIMER MODAL */}
+      {declarationModalOpen && (
+        <div className="declaration-modal-overlay" onClick={() => setDeclarationModalOpen(false)}>
+          <div className="declaration-modal-card" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="declaration-title">
+            <div className="declaration-modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <div className="declaration-modal-icon">
+                  <ShieldAlert size={22} />
+                </div>
+                <div>
+                  <h3 id="declaration-title" className="font-display" style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>
+                    Important Declaration &amp; Disclaimer
+                  </h3>
+                  <p className="muted" style={{ margin: 0, fontSize: '0.78rem' }}>
+                    Please review carefully before using TeleVault storage services
+                  </p>
+                </div>
+              </div>
+              <button
+                className="btn-secondary"
+                onClick={() => setDeclarationModalOpen(false)}
+                style={{ padding: '0.35rem 0.55rem' }}
+                aria-label="Close Declaration"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="declaration-modal-body">
+              <div className="declaration-callout">
+                <AlertTriangle size={20} className="text-amber-400" style={{ flexShrink: 0, marginTop: '2px' }} />
+                <div>
+                  <strong style={{ fontSize: '0.92rem' }}>USE AT YOUR OWN RISK</strong>
+                  <p style={{ margin: '0.25rem 0 0', fontSize: '0.84rem', lineHeight: 1.45 }}>
+                    TeleVault is provided strictly on an &quot;as-is&quot; and &quot;as-available&quot; basis without warranties of any kind. You assume full responsibility for all content uploaded and stored through this application.
+                  </p>
+                </div>
+              </div>
+
+              <div className="declaration-sections">
+                <div className="declaration-item">
+                  <h4>1. Third-Party Infrastructure Notice</h4>
+                  <p>
+                    TeleVault routes and stores binary payloads utilizing Telegram Bot &amp; Cloud API. TeleVault is an independent project and is not affiliated with, endorsed by, or sponsored by Telegram FZ-LLC. File availability, bandwidth, and retention policies are subject to Telegram&apos;s Terms of Service and API rate limits.
+                  </p>
+                </div>
+
+                <div className="declaration-item">
+                  <h4>2. Personal &amp; Demonstration Usage</h4>
+                  <p>
+                    This platform is intended for personal storage and technical exploration. Do not treat TeleVault as your primary or single point of backup for mission-critical, irreplaceable, or legally sensitive documents. Always maintain separate independent backups of essential files.
+                  </p>
+                </div>
+
+                <div className="declaration-item">
+                  <h4>3. Sensitive &amp; Prohibited Content</h4>
+                  <p>
+                    You strictly agree <strong>NOT</strong> to store:
+                  </p>
+                  <ul>
+                    <li>Unencrypted passwords, recovery seed phrases, private keys, or banking credentials</li>
+                    <li>Protected health records or sensitive government-issued identification numbers</li>
+                    <li>Copyrighted materials for unauthorized public dissemination</li>
+                    <li>Any illicit, abusive, defamatory, or unlawful digital media</li>
+                  </ul>
+                </div>
+
+                <div className="declaration-item">
+                  <h4>4. Limitation of Liability</h4>
+                  <p>
+                    Under no circumstances shall the maintainers, developers, or hosting providers of TeleVault be held liable for data loss, service interruption, file corruption, third-party API changes, or unauthorized access resulting from compromised user credentials.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="declaration-modal-footer">
+              <button
+                className="primary"
+                style={{ width: '100%', justifyContent: 'center', minHeight: '2.75rem' }}
+                onClick={() => {
+                  setDeclarationModalOpen(false);
+                  setDeclarationBannerDismissed(true);
+                  localStorage.setItem('televault_declaration_dismissed', 'true');
+                }}
+              >
+                <CheckCircle2 size={16} />
+                <span>I Understand &amp; Agree</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
