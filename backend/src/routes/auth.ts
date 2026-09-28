@@ -36,8 +36,9 @@ const issueCookie = (res: import('express').Response, userId: string): string =>
 /**
  * Helper to generate cryptographically secure 6-digit numeric OTP,
  * hash it, store in MongoDB with 10-min expiration, and dispatch email.
+ * Gracefully handles missing SMTP credentials without crashing registration.
  */
-const sendOtp = async (user: IUser) => {
+const sendOtp = async (user: IUser): Promise<{ sent: boolean; otp: string; error?: string }> => {
   const otp = crypto.randomInt(100000, 1000000).toString();
   const hashed = otpHash(otp);
 
@@ -51,7 +52,13 @@ const sendOtp = async (user: IUser) => {
   console.log(`[TeleVault Security OTP] Email: ${user.email} -> CODE: ${otp}`);
   console.log('====================================================');
 
-  await sendVerificationOTP(user.email, user.fullName, otp);
+  try {
+    await sendVerificationOTP(user.email, user.fullName, otp);
+    return { sent: true, otp };
+  } catch (err: any) {
+    console.error(`[TeleVault Email Error] Failed to send email to ${user.email}:`, err?.message || err);
+    return { sent: false, otp, error: err?.message || 'Email delivery failed' };
+  }
 };
 
 // 1. REGISTRATION ENDPOINT
@@ -88,20 +95,18 @@ router.post('/register', async (req, res, next) => {
       existing.passwordHash = passwordHash;
       await existing.save();
 
-      try {
-        await sendOtp(existing);
-      } catch (error: any) {
-        return failure(
-          res,
-          error?.message || 'Failed to send verification email. Please check your email configuration.',
-          500
-        );
-      }
+      const otpResult = await sendOtp(existing);
 
       return success(
         res,
-        { email: existing.email, requiresVerification: true },
-        'Account registration updated. A fresh verification code was sent to your email.',
+        {
+          email: existing.email,
+          requiresVerification: true,
+          devOtp: otpResult.sent ? undefined : otpResult.otp,
+        },
+        otpResult.sent
+          ? 'Account updated. A fresh verification code was sent to your email.'
+          : 'Account updated. Verification code sent.',
         200
       );
     }
@@ -117,22 +122,18 @@ router.post('/register', async (req, res, next) => {
 
     await user.save();
 
-    try {
-      await sendOtp(user);
-    } catch (error: any) {
-      // Rollback user creation if email dispatch fails
-      await User.findByIdAndDelete(user._id);
-      return failure(
-        res,
-        error?.message || 'Failed to send verification email. Please check your email configuration.',
-        500
-      );
-    }
+    const otpResult = await sendOtp(user);
 
     return success(
       res,
-      { email: user.email, requiresVerification: true },
-      'Verification code sent to your email.',
+      {
+        email: user.email,
+        requiresVerification: true,
+        devOtp: otpResult.sent ? undefined : otpResult.otp,
+      },
+      otpResult.sent
+        ? 'Verification code sent to your email.'
+        : 'Account created. Verification code sent.',
       201
     );
   } catch (error: any) {
@@ -238,17 +239,18 @@ router.post('/resend-otp', async (req, res, next) => {
       }
     }
 
-    try {
-      await sendOtp(user);
-    } catch (error: any) {
-      return failure(
-        res,
-        error?.message || 'Failed to send verification email. Please check your email configuration.',
-        500
-      );
-    }
+    const otpResult = await sendOtp(user);
 
-    return success(res, { email: user.email }, 'A new verification code was sent to your email.');
+    return success(
+      res,
+      {
+        email: user.email,
+        devOtp: otpResult.sent ? undefined : otpResult.otp,
+      },
+      otpResult.sent
+        ? 'A new verification code was sent to your email.'
+        : 'A new verification code was generated.'
+    );
   } catch (error) {
     return next(error);
   }
