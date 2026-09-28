@@ -34,10 +34,10 @@ const issueCookie = (res: import('express').Response, userId: string): string =>
 };
 
 /**
- * Helper to generate cryptographically secure 6-digit numeric OTP,
- * hash it, store in MongoDB with 10-min expiration, and dispatch email.
+ * Generates cryptographically secure 6-digit numeric OTP,
+ * hashes it, stores in MongoDB with 10-min expiration, and dispatches email.
  */
-const sendOtp = async (user: IUser): Promise<{ sent: boolean; otp: string; error?: string }> => {
+const sendOtp = async (user: IUser): Promise<void> => {
   const otp = crypto.randomInt(100000, 1000000).toString();
   const hashed = otpHash(otp);
 
@@ -51,24 +51,21 @@ const sendOtp = async (user: IUser): Promise<{ sent: boolean; otp: string; error
   console.log(`[TeleVault Security OTP] Email: ${user.email} -> CODE: ${otp}`);
   console.log('====================================================');
 
-  try {
-    await sendVerificationOTP(user.email, user.fullName, otp);
-    return { sent: true, otp };
-  } catch (err: any) {
-    console.error(`[TeleVault Email Error] Failed to send email to ${user.email}:`, err?.message || err);
-    return { sent: false, otp, error: err?.message || 'Email delivery failed' };
-  }
+  await sendVerificationOTP(user.email, user.fullName, otp);
 };
 
-// 0. SMTP HEALTH CHECK ENDPOINT
+// 0. EMAIL HEALTH CHECK ENDPOINT
 router.get('/smtp-status', async (_req, res) => {
   const result = await verifySmtpConnection();
   const rawUser = process.env.EMAIL_USER || config.email.user || '';
   return res.json({
     success: result.ok,
-    configured: Boolean(process.env.EMAIL_USER && process.env.EMAIL_PASSWORD),
+    provider: result.provider,
+    resendConfigured: Boolean(process.env.RESEND_API_KEY),
+    brevoConfigured: Boolean(process.env.BREVO_API_KEY),
+    smtpConfigured: Boolean(process.env.EMAIL_USER && process.env.EMAIL_PASSWORD),
     user: rawUser ? `${rawUser.slice(0, 3)}***@gmail.com` : 'NOT_SET',
-    status: result.ok ? 'SMTP Connection Verified and Operational' : result.error,
+    status: result.ok ? 'Email Service Connected and Operational' : result.error,
   });
 });
 
@@ -106,19 +103,23 @@ router.post('/register', async (req, res, next) => {
       existing.passwordHash = passwordHash;
       await existing.save();
 
-      const otpResult = await sendOtp(existing);
+      try {
+        await sendOtp(existing);
+      } catch (err: any) {
+        return failure(
+          res,
+          err?.message || 'Failed to send verification email. Please check your email configuration on Render.',
+          500
+        );
+      }
 
       return success(
         res,
         {
           email: existing.email,
           requiresVerification: true,
-          emailSent: otpResult.sent,
-          fallbackOtp: otpResult.sent ? undefined : otpResult.otp,
         },
-        otpResult.sent
-          ? 'Account updated. A fresh verification code has been sent to your email.'
-          : 'Account updated. Verification code generated.',
+        'A fresh verification code was sent to your email.',
         200
       );
     }
@@ -134,19 +135,24 @@ router.post('/register', async (req, res, next) => {
 
     await user.save();
 
-    const otpResult = await sendOtp(user);
+    try {
+      await sendOtp(user);
+    } catch (err: any) {
+      await User.findByIdAndDelete(user._id);
+      return failure(
+        res,
+        err?.message || 'Failed to send verification email. Please check your email configuration on Render.',
+        500
+      );
+    }
 
     return success(
       res,
       {
         email: user.email,
         requiresVerification: true,
-        emailSent: otpResult.sent,
-        fallbackOtp: otpResult.sent ? undefined : otpResult.otp,
       },
-      otpResult.sent
-        ? 'Verification code sent to your email.'
-        : 'Account created. Verification code generated.',
+      'Verification code sent to your email.',
       201
     );
   } catch (error: any) {
@@ -178,7 +184,6 @@ router.post('/verify-email', async (req, res, next) => {
     }
 
     if (user.otpAttempts >= 5) {
-      // Invalidate the expired/exhausted OTP
       user.emailVerificationOtpHash = null;
       user.emailVerificationOtpExpiresAt = null;
       await user.save();
@@ -252,18 +257,22 @@ router.post('/resend-otp', async (req, res, next) => {
       }
     }
 
-    const otpResult = await sendOtp(user);
+    try {
+      await sendOtp(user);
+    } catch (err: any) {
+      return failure(
+        res,
+        err?.message || 'Failed to send verification email. Please check your email configuration on Render.',
+        500
+      );
+    }
 
     return success(
       res,
       {
         email: user.email,
-        emailSent: otpResult.sent,
-        fallbackOtp: otpResult.sent ? undefined : otpResult.otp,
       },
-      otpResult.sent
-        ? 'A new verification code was sent to your email.'
-        : 'A new verification code was generated.'
+      'A new verification code was sent to your email.'
     );
   } catch (error) {
     return next(error);
@@ -289,12 +298,10 @@ router.post('/login', async (req, res, next) => {
     }
 
     if (!user.isEmailVerified) {
-      let unverifiedOtp: string | undefined;
       try {
         const elapsed = user.lastOtpSentAt ? Date.now() - new Date(user.lastOtpSentAt).getTime() : 999999;
         if (elapsed > 15000) {
-          const otpResult = await sendOtp(user);
-          if (!otpResult.sent) unverifiedOtp = otpResult.otp;
+          await sendOtp(user);
         }
       } catch (err) {
         console.error('[TeleVault Auth] Failed to dispatch OTP during unverified login:', err);
@@ -307,7 +314,6 @@ router.post('/login', async (req, res, next) => {
         data: {
           email: user.email,
           requiresVerification: true,
-          fallbackOtp: unverifiedOtp,
         },
       });
     }

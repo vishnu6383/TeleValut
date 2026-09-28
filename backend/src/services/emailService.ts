@@ -11,21 +11,20 @@ const getTransporter = (): Transporter | null => {
     return null;
   }
 
-  // Use fast 3.5s timeout on port 465 to prevent hanging if cloud host blocks SMTP ports
   return nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
+    host: config.email.host?.trim() || process.env.EMAIL_HOST?.trim() || 'smtp.gmail.com',
+    port: Number(config.email.port || process.env.EMAIL_PORT || 465),
+    secure: Number(config.email.port || process.env.EMAIL_PORT || 465) === 465,
     auth: { user, pass },
     tls: { rejectUnauthorized: false },
-    connectionTimeout: 3500,
-    greetingTimeout: 3500,
-    socketTimeout: 4000,
+    connectionTimeout: 8000,
+    greetingTimeout: 8000,
+    socketTimeout: 10000,
   });
 };
 
 /**
- * Sends email via Resend HTTPS API (Port 443) if RESEND_API_KEY is configured
+ * Sends email via Resend HTTPS API (Port 443)
  */
 const sendViaResend = async (
   apiKey: string,
@@ -33,7 +32,7 @@ const sendViaResend = async (
   subject: string,
   html: string,
   text: string
-): Promise<boolean> => {
+): Promise<{ ok: boolean; error?: string }> => {
   try {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -49,41 +48,90 @@ const sendViaResend = async (
         text,
       }),
     });
-    return res.ok;
-  } catch {
-    return false;
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { ok: false, error: data?.message || `Resend failed with status ${res.status}` };
+    }
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || 'Failed to connect to Resend API' };
   }
 };
 
 /**
- * Verifies SMTP server connectivity and authentication.
+ * Sends email via Brevo HTTPS API (Port 443)
  */
-export const verifySmtpConnection = async (): Promise<{ ok: boolean; error?: string }> => {
+const sendViaBrevo = async (
+  apiKey: string,
+  to: string,
+  fullName: string,
+  senderEmail: string,
+  subject: string,
+  htmlContent: string
+): Promise<{ ok: boolean; error?: string }> => {
+  try {
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': apiKey,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        sender: { name: 'TeleVault', email: senderEmail },
+        to: [{ email: to, name: fullName || to }],
+        subject,
+        htmlContent,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { ok: false, error: data?.message || `Brevo failed with status ${res.status}` };
+    }
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || 'Failed to connect to Brevo API' };
+  }
+};
+
+/**
+ * Verifies email service connectivity.
+ */
+export const verifySmtpConnection = async (): Promise<{ ok: boolean; provider: string; error?: string }> => {
   const resendKey = process.env.RESEND_API_KEY?.trim();
   if (resendKey) {
-    return { ok: true, error: undefined };
+    return { ok: true, provider: 'Resend HTTPS API (Port 443)' };
+  }
+
+  const brevoKey = process.env.BREVO_API_KEY?.trim();
+  if (brevoKey) {
+    return { ok: true, provider: 'Brevo HTTPS API (Port 443)' };
   }
 
   const transporter = getTransporter();
   if (!transporter) {
     return {
       ok: false,
-      error: 'SMTP credentials missing. Please set EMAIL_USER and EMAIL_PASSWORD in Render Environment variables.',
+      provider: 'None',
+      error: 'No email configuration found. Please configure RESEND_API_KEY (recommended for Render) or EMAIL_USER/EMAIL_PASSWORD.',
     };
   }
+
   try {
     await transporter.verify();
-    return { ok: true };
+    return { ok: true, provider: 'SMTP' };
   } catch (error: any) {
     return {
       ok: false,
-      error: error?.message || 'Failed to authenticate with SMTP provider (Render may block SMTP ports 465/587).',
+      provider: 'SMTP',
+      error: error?.message || 'SMTP connection timeout or authentication error.',
     };
   }
 };
 
 /**
  * Sends a real-time 6-digit OTP email to the user's registered email address.
+ * Strictly verifies delivery and throws an error if email dispatch fails.
  */
 export const sendVerificationOTP = async (
   email: string,
@@ -127,36 +175,48 @@ export const sendVerificationOTP = async (
   `;
 
   const textContent = `Hi ${fullName || 'there'},\n\nYour TeleVault verification code is: ${otp}\n\nThis code will expire in 10 minutes.\n\n— TeleVault`;
+  const subject = `Your TeleVault Verification Code: ${otp}`;
 
-  // 1. Try Resend HTTPS API if available
+  // 1. Try Resend HTTPS API (Port 443 - Works seamlessly on Render)
   const resendKey = process.env.RESEND_API_KEY?.trim();
   if (resendKey) {
-    const success = await sendViaResend(
-      resendKey,
-      email,
-      `Your TeleVault Verification Code: ${otp}`,
-      htmlContent,
-      textContent
-    );
-    if (success) return;
+    const resendResult = await sendViaResend(resendKey, email, subject, htmlContent, textContent);
+    if (resendResult.ok) {
+      console.log(`[TeleVault Email] Successfully dispatched OTP email to ${email} via Resend HTTPS.`);
+      return;
+    }
+    console.error(`[TeleVault Email] Resend API error: ${resendResult.error}`);
   }
 
-  // 2. Try Gmail SMTP
+  // 2. Try Brevo HTTPS API (Port 443 - Works seamlessly on Render)
+  const brevoKey = process.env.BREVO_API_KEY?.trim();
+  const senderEmail = config.email.user?.trim() || process.env.EMAIL_USER?.trim() || 'vishnunaveenkumar27@gmail.com';
+  if (brevoKey) {
+    const brevoResult = await sendViaBrevo(brevoKey, email, fullName, senderEmail, subject, htmlContent);
+    if (brevoResult.ok) {
+      console.log(`[TeleVault Email] Successfully dispatched OTP email to ${email} via Brevo HTTPS.`);
+      return;
+    }
+    console.error(`[TeleVault Email] Brevo API error: ${brevoResult.error}`);
+  }
+
+  // 3. Try Direct SMTP / Gmail
   const transporter = getTransporter();
   if (!transporter) {
     throw new Error(
-      'Email service is not configured. Please provide EMAIL_USER and EMAIL_PASSWORD in Render Environment variables.'
+      'Email service is not configured. On Render, please add RESEND_API_KEY or configure EMAIL_USER/EMAIL_PASSWORD.'
     );
   }
 
-  const senderUser = config.email.user?.trim() || process.env.EMAIL_USER?.trim() || 'vishnunaveenkumar27@gmail.com';
-  const fromAddress = `TeleVault <${senderUser}>`;
+  const fromAddress = `TeleVault <${senderEmail}>`;
 
   await transporter.sendMail({
     from: fromAddress,
     to: email,
-    subject: `Your TeleVault Verification Code: ${otp}`,
+    subject,
     text: textContent,
     html: htmlContent,
   });
+
+  console.log(`[TeleVault Email] Successfully dispatched OTP email to ${email} via SMTP.`);
 };
