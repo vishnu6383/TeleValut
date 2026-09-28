@@ -116,7 +116,7 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       const normalizedEmail = form.email.trim().toLowerCase();
-      await api('/auth/register', {
+      const res = await api<{ email: string; fallbackOtp?: string }>('/auth/register', {
         method: 'POST',
         body: JSON.stringify({
           fullName: form.fullName.trim(),
@@ -127,11 +127,17 @@ export default function RegisterPage() {
       });
 
       sessionStorage.setItem('verifyEmail', normalizedEmail);
+      if (res?.fallbackOtp) {
+        sessionStorage.setItem('fallbackOtp', res.fallbackOtp);
+      }
       router.push(`/verify-email?email=${encodeURIComponent(normalizedEmail)}`);
     } catch (err: unknown) {
-      const apiErr = err as { message?: string; code?: string; data?: { requiresVerification?: boolean } };
+      const apiErr = err as { message?: string; code?: string; data?: { requiresVerification?: boolean; fallbackOtp?: string } };
       if (apiErr?.code === 'EMAIL_NOT_VERIFIED' || apiErr?.data?.requiresVerification) {
         sessionStorage.setItem('verifyEmail', form.email.trim().toLowerCase());
+        if (apiErr?.data?.fallbackOtp) {
+          sessionStorage.setItem('fallbackOtp', apiErr.data.fallbackOtp);
+        }
         router.push(`/verify-email?email=${encodeURIComponent(form.email.trim().toLowerCase())}`);
         return;
       }

@@ -73,7 +73,7 @@ export default function LoginPage() {
       }
       router.push('/dashboard');
     } catch (err: unknown) {
-      const apiErr = err as { message?: string; code?: string; data?: { email?: string; requiresVerification?: boolean } };
+      const apiErr = err as { message?: string; code?: string; data?: { email?: string; requiresVerification?: boolean; fallbackOtp?: string } };
       if (
         apiErr?.code === 'EMAIL_NOT_VERIFIED' ||
         apiErr?.data?.requiresVerification ||
@@ -82,6 +82,9 @@ export default function LoginPage() {
         const unverifiedEmail = apiErr?.data?.email || (identifier.includes('@') ? identifier.trim() : '');
         if (unverifiedEmail) {
           sessionStorage.setItem('verifyEmail', unverifiedEmail);
+        }
+        if (apiErr?.data?.fallbackOtp) {
+          sessionStorage.setItem('fallbackOtp', apiErr.data.fallbackOtp);
         }
         router.push(
           unverifiedEmail

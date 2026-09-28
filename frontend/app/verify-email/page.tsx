@@ -29,6 +29,7 @@ export default function VerifyEmailPage() {
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [verifiedSuccess, setVerifiedSuccess] = useState(false);
+  const [fallbackOtp, setFallbackOtp] = useState('');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -52,6 +53,11 @@ export default function VerifyEmailPage() {
     const paramEmail = params.get('email')?.trim().toLowerCase();
     const savedEmail = sessionStorage.getItem('verifyEmail')?.trim().toLowerCase() ?? '';
     const initialEmail = paramEmail || savedEmail;
+
+    const savedFallback = sessionStorage.getItem('fallbackOtp')?.trim() ?? '';
+    if (savedFallback) {
+      setFallbackOtp(savedFallback);
+    }
 
     if (initialEmail) {
       setEmail(initialEmail);
@@ -154,6 +160,7 @@ export default function VerifyEmailPage() {
       setVerifiedSuccess(true);
       setNotice('Email verified successfully! Unlocking your vault...');
       sessionStorage.removeItem('verifyEmail');
+      sessionStorage.removeItem('fallbackOtp');
       setTimeout(() => router.push(data?.token ? '/dashboard' : '/login'), 1200);
     } catch (err) {
       setError((err as Error).message || 'Invalid or expired verification code.');
@@ -174,12 +181,20 @@ export default function VerifyEmailPage() {
     setNotice('');
 
     try {
-      await api('/auth/resend-otp', {
+      const res = await api<{ email: string; emailSent?: boolean; fallbackOtp?: string }>('/auth/resend-otp', {
         method: 'POST',
         body: JSON.stringify({ email: targetEmail }),
       });
       setCount(15);
-      setNotice('A fresh verification code has been dispatched to your email.');
+      if (res?.fallbackOtp) {
+        setFallbackOtp(res.fallbackOtp);
+        sessionStorage.setItem('fallbackOtp', res.fallbackOtp);
+      }
+      setNotice(
+        res?.emailSent
+          ? 'A fresh verification code has been dispatched to your email.'
+          : 'A fresh verification code was generated.'
+      );
     } catch (err) {
       setError((err as Error).message || 'Failed to resend code. Please try again.');
     } finally {
@@ -305,6 +320,44 @@ export default function VerifyEmailPage() {
                 required
               />
             </div>
+          </div>
+        )}
+
+        {/* Quick Auto-Fill Banner when SMTP is blocked on cloud host */}
+        {fallbackOtp && (
+          <div
+            style={{
+              marginTop: '1.25rem',
+              padding: '0.85rem 1rem',
+              borderRadius: '0.9rem',
+              background: 'rgba(215, 232, 126, 0.08)',
+              border: '1.5px dashed rgba(215, 232, 126, 0.4)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '0.75rem',
+            }}
+          >
+            <div>
+              <p style={{ fontSize: '0.74rem', color: 'var(--lime)', fontWeight: 800, margin: 0, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Instant Access Code
+              </p>
+              <p style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--ink)', margin: '0.15rem 0 0', letterSpacing: '0.25em', fontFamily: 'var(--font-space-grotesk), monospace' }}>
+                {fallbackOtp}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const arr = fallbackOtp.split('').slice(0, 6);
+                setDigits(arr);
+                if (inputRefs.current[5]) inputRefs.current[5].focus();
+              }}
+              className="primary"
+              style={{ padding: '0.45rem 0.85rem', fontSize: '0.8rem', minHeight: 'auto', whiteSpace: 'nowrap' }}
+            >
+              Auto-Fill Code ➔
+            </button>
           </div>
         )}
 

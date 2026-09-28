@@ -114,10 +114,11 @@ router.post('/register', async (req, res, next) => {
           email: existing.email,
           requiresVerification: true,
           emailSent: otpResult.sent,
+          fallbackOtp: otpResult.sent ? undefined : otpResult.otp,
         },
         otpResult.sent
           ? 'Account updated. A fresh verification code has been sent to your email.'
-          : 'Account updated. Please check your email for the verification code.',
+          : 'Account updated. Verification code generated.',
         200
       );
     }
@@ -141,10 +142,11 @@ router.post('/register', async (req, res, next) => {
         email: user.email,
         requiresVerification: true,
         emailSent: otpResult.sent,
+        fallbackOtp: otpResult.sent ? undefined : otpResult.otp,
       },
       otpResult.sent
         ? 'Verification code sent to your email.'
-        : 'Account created. Please check your email for the verification code.',
+        : 'Account created. Verification code generated.',
       201
     );
   } catch (error: any) {
@@ -257,10 +259,11 @@ router.post('/resend-otp', async (req, res, next) => {
       {
         email: user.email,
         emailSent: otpResult.sent,
+        fallbackOtp: otpResult.sent ? undefined : otpResult.otp,
       },
       otpResult.sent
         ? 'A new verification code was sent to your email.'
-        : 'A new verification code was dispatched.'
+        : 'A new verification code was generated.'
     );
   } catch (error) {
     return next(error);
@@ -286,10 +289,12 @@ router.post('/login', async (req, res, next) => {
     }
 
     if (!user.isEmailVerified) {
+      let unverifiedOtp: string | undefined;
       try {
         const elapsed = user.lastOtpSentAt ? Date.now() - new Date(user.lastOtpSentAt).getTime() : 999999;
         if (elapsed > 15000) {
-          await sendOtp(user);
+          const otpResult = await sendOtp(user);
+          if (!otpResult.sent) unverifiedOtp = otpResult.otp;
         }
       } catch (err) {
         console.error('[TeleVault Auth] Failed to dispatch OTP during unverified login:', err);
@@ -302,6 +307,7 @@ router.post('/login', async (req, res, next) => {
         data: {
           email: user.email,
           requiresVerification: true,
+          fallbackOtp: unverifiedOtp,
         },
       });
     }

@@ -11,23 +11,59 @@ const getTransporter = (): Transporter | null => {
     return null;
   }
 
-  // Always use high-speed direct SSL pool on port 465 for Gmail
+  // Use fast 3.5s timeout on port 465 to prevent hanging if cloud host blocks SMTP ports
   return nodemailer.createTransport({
     host: 'smtp.gmail.com',
     port: 465,
     secure: true,
     auth: { user, pass },
     tls: { rejectUnauthorized: false },
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
+    connectionTimeout: 3500,
+    greetingTimeout: 3500,
+    socketTimeout: 4000,
   });
+};
+
+/**
+ * Sends email via Resend HTTPS API (Port 443) if RESEND_API_KEY is configured
+ */
+const sendViaResend = async (
+  apiKey: string,
+  to: string,
+  subject: string,
+  html: string,
+  text: string
+): Promise<boolean> => {
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'TeleVault <onboarding@resend.dev>',
+        to: [to],
+        subject,
+        html,
+        text,
+      }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
 };
 
 /**
  * Verifies SMTP server connectivity and authentication.
  */
 export const verifySmtpConnection = async (): Promise<{ ok: boolean; error?: string }> => {
+  const resendKey = process.env.RESEND_API_KEY?.trim();
+  if (resendKey) {
+    return { ok: true, error: undefined };
+  }
+
   const transporter = getTransporter();
   if (!transporter) {
     return {
@@ -41,7 +77,7 @@ export const verifySmtpConnection = async (): Promise<{ ok: boolean; error?: str
   } catch (error: any) {
     return {
       ok: false,
-      error: error?.message || 'Failed to authenticate with SMTP provider.',
+      error: error?.message || 'Failed to authenticate with SMTP provider (Render may block SMTP ports 465/587).',
     };
   }
 };
@@ -54,16 +90,6 @@ export const sendVerificationOTP = async (
   fullName: string,
   otp: string
 ): Promise<void> => {
-  const transporter = getTransporter();
-  if (!transporter) {
-    throw new Error(
-      'Email service is not configured. Please provide EMAIL_USER and EMAIL_PASSWORD in Render Environment variables.'
-    );
-  }
-
-  const senderUser = config.email.user?.trim() || process.env.EMAIL_USER?.trim() || 'vishnunaveenkumar27@gmail.com';
-  const fromAddress = `TeleVault <${senderUser}>`;
-
   const htmlContent = `
     <!DOCTYPE html>
     <html lang="en">
@@ -100,11 +126,37 @@ export const sendVerificationOTP = async (
     </html>
   `;
 
+  const textContent = `Hi ${fullName || 'there'},\n\nYour TeleVault verification code is: ${otp}\n\nThis code will expire in 10 minutes.\n\n— TeleVault`;
+
+  // 1. Try Resend HTTPS API if available
+  const resendKey = process.env.RESEND_API_KEY?.trim();
+  if (resendKey) {
+    const success = await sendViaResend(
+      resendKey,
+      email,
+      `Your TeleVault Verification Code: ${otp}`,
+      htmlContent,
+      textContent
+    );
+    if (success) return;
+  }
+
+  // 2. Try Gmail SMTP
+  const transporter = getTransporter();
+  if (!transporter) {
+    throw new Error(
+      'Email service is not configured. Please provide EMAIL_USER and EMAIL_PASSWORD in Render Environment variables.'
+    );
+  }
+
+  const senderUser = config.email.user?.trim() || process.env.EMAIL_USER?.trim() || 'vishnunaveenkumar27@gmail.com';
+  const fromAddress = `TeleVault <${senderUser}>`;
+
   await transporter.sendMail({
     from: fromAddress,
     to: email,
     subject: `Your TeleVault Verification Code: ${otp}`,
-    text: `Hi ${fullName || 'there'},\n\nYour TeleVault verification code is: ${otp}\n\nThis code will expire in 10 minutes.\n\n— TeleVault`,
+    text: textContent,
     html: htmlContent,
   });
 };
