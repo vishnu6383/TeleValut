@@ -11,32 +11,16 @@ const getTransporter = (): Transporter | null => {
     return null;
   }
 
-  const host = config.email.host?.trim() || process.env.EMAIL_HOST?.trim() || 'smtp.gmail.com';
-  const port = Number(config.email.port || process.env.EMAIL_PORT || 465);
-  const isGmail = host.toLowerCase().includes('gmail') || user.toLowerCase().endsWith('@gmail.com');
-
-  if (isGmail) {
-    return nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
-      auth: { user, pass },
-      tls: { rejectUnauthorized: false },
-      connectionTimeout: 8000,
-      greetingTimeout: 8000,
-      socketTimeout: 10000,
-    });
-  }
-
+  // Always use high-speed direct SSL pool on port 465 for Gmail
   return nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465,
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
     auth: { user, pass },
     tls: { rejectUnauthorized: false },
-    connectionTimeout: 8000,
-    greetingTimeout: 8000,
-    socketTimeout: 10000,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
   });
 };
 
@@ -48,7 +32,7 @@ export const verifySmtpConnection = async (): Promise<{ ok: boolean; error?: str
   if (!transporter) {
     return {
       ok: false,
-      error: 'SMTP credentials missing. Please set EMAIL_USER and EMAIL_PASSWORD in .env',
+      error: 'SMTP credentials missing. Please set EMAIL_USER and EMAIL_PASSWORD in Render Environment variables.',
     };
   }
   try {
@@ -73,12 +57,12 @@ export const sendVerificationOTP = async (
   const transporter = getTransporter();
   if (!transporter) {
     throw new Error(
-      'Email service is not configured. Please provide EMAIL_USER and EMAIL_PASSWORD in .env.'
+      'Email service is not configured. Please provide EMAIL_USER and EMAIL_PASSWORD in Render Environment variables.'
     );
   }
 
-  const senderUser = config.email.user?.trim() || process.env.EMAIL_USER?.trim();
-  const fromAddress = config.email.from || process.env.EMAIL_FROM || `TeleVault <${senderUser}>`;
+  const senderUser = config.email.user?.trim() || process.env.EMAIL_USER?.trim() || 'vishnunaveenkumar27@gmail.com';
+  const fromAddress = `TeleVault <${senderUser}>`;
 
   const htmlContent = `
     <!DOCTYPE html>

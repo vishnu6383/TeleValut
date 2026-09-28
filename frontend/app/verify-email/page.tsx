@@ -25,7 +25,7 @@ export default function VerifyEmailPage() {
   const [digits, setDigits] = useState<string[]>(['', '', '', '', '', '']);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [count, setCount] = useState(60);
+  const [count, setCount] = useState(15);
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [verifiedSuccess, setVerifiedSuccess] = useState(false);
@@ -178,7 +178,7 @@ export default function VerifyEmailPage() {
         method: 'POST',
         body: JSON.stringify({ email: targetEmail }),
       });
-      setCount(60);
+      setCount(15);
       setNotice('A fresh verification code has been dispatched to your email.');
     } catch (err) {
       setError((err as Error).message || 'Failed to resend code. Please try again.');

@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { User, IUser } from '../models/User';
 import { config } from '../config';
-import { sendVerificationOTP } from '../services/emailService';
+import { sendVerificationOTP, verifySmtpConnection } from '../services/emailService';
 import { authenticate } from '../middleware/auth';
 import { failure, success } from '../utils/api';
 
@@ -36,7 +36,6 @@ const issueCookie = (res: import('express').Response, userId: string): string =>
 /**
  * Helper to generate cryptographically secure 6-digit numeric OTP,
  * hash it, store in MongoDB with 10-min expiration, and dispatch email.
- * Gracefully handles missing SMTP credentials without crashing registration.
  */
 const sendOtp = async (user: IUser): Promise<{ sent: boolean; otp: string; error?: string }> => {
   const otp = crypto.randomInt(100000, 1000000).toString();
@@ -60,6 +59,18 @@ const sendOtp = async (user: IUser): Promise<{ sent: boolean; otp: string; error
     return { sent: false, otp, error: err?.message || 'Email delivery failed' };
   }
 };
+
+// 0. SMTP HEALTH CHECK ENDPOINT
+router.get('/smtp-status', async (_req, res) => {
+  const result = await verifySmtpConnection();
+  const rawUser = process.env.EMAIL_USER || config.email.user || '';
+  return res.json({
+    success: result.ok,
+    configured: Boolean(process.env.EMAIL_USER && process.env.EMAIL_PASSWORD),
+    user: rawUser ? `${rawUser.slice(0, 3)}***@gmail.com` : 'NOT_SET',
+    status: result.ok ? 'SMTP Connection Verified and Operational' : result.error,
+  });
+});
 
 // 1. REGISTRATION ENDPOINT
 router.post('/register', async (req, res, next) => {
@@ -102,11 +113,11 @@ router.post('/register', async (req, res, next) => {
         {
           email: existing.email,
           requiresVerification: true,
-          devOtp: otpResult.sent ? undefined : otpResult.otp,
+          emailSent: otpResult.sent,
         },
         otpResult.sent
-          ? 'Account updated. A fresh verification code was sent to your email.'
-          : 'Account updated. Verification code sent.',
+          ? 'Account updated. A fresh verification code has been sent to your email.'
+          : 'Account updated. Please check your email for the verification code.',
         200
       );
     }
@@ -129,11 +140,11 @@ router.post('/register', async (req, res, next) => {
       {
         email: user.email,
         requiresVerification: true,
-        devOtp: otpResult.sent ? undefined : otpResult.otp,
+        emailSent: otpResult.sent,
       },
       otpResult.sent
         ? 'Verification code sent to your email.'
-        : 'Account created. Verification code sent.',
+        : 'Account created. Please check your email for the verification code.',
       201
     );
   } catch (error: any) {
@@ -226,11 +237,11 @@ router.post('/resend-otp', async (req, res, next) => {
       return failure(res, 'This account is already verified. Please sign in.', 400);
     }
 
-    // 60-second cooldown check
+    // 15-second cooldown check
     if (user.lastOtpSentAt) {
       const elapsed = Date.now() - new Date(user.lastOtpSentAt).getTime();
-      if (elapsed < 60_000) {
-        const remainingSeconds = Math.ceil((60_000 - elapsed) / 1000);
+      if (elapsed < 15_000) {
+        const remainingSeconds = Math.ceil((15_000 - elapsed) / 1000);
         return failure(
           res,
           `Please wait ${remainingSeconds} second${remainingSeconds === 1 ? '' : 's'} before requesting another code.`,
@@ -245,11 +256,11 @@ router.post('/resend-otp', async (req, res, next) => {
       res,
       {
         email: user.email,
-        devOtp: otpResult.sent ? undefined : otpResult.otp,
+        emailSent: otpResult.sent,
       },
       otpResult.sent
         ? 'A new verification code was sent to your email.'
-        : 'A new verification code was generated.'
+        : 'A new verification code was dispatched.'
     );
   } catch (error) {
     return next(error);
@@ -277,7 +288,7 @@ router.post('/login', async (req, res, next) => {
     if (!user.isEmailVerified) {
       try {
         const elapsed = user.lastOtpSentAt ? Date.now() - new Date(user.lastOtpSentAt).getTime() : 999999;
-        if (elapsed > 30000) {
+        if (elapsed > 15000) {
           await sendOtp(user);
         }
       } catch (err) {
