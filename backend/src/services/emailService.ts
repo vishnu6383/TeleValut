@@ -1,54 +1,63 @@
 import nodemailer from 'nodemailer';
+import type { Transporter } from 'nodemailer';
 import { config } from '../config';
 
-const createTransporter = () => {
-  if (!config.email.user || !config.email.password) {
+let cachedTransporter: Transporter | null = null;
+
+const getTransporter = (): Transporter | null => {
+  if (cachedTransporter) return cachedTransporter;
+
+  const user = config.email.user?.trim() || process.env.EMAIL_USER?.trim();
+  const rawPass = config.email.password || process.env.EMAIL_PASSWORD || '';
+  const pass = rawPass.trim().replace(/\s+/g, '');
+
+  if (!user || !pass) {
     return null;
   }
 
-  const cleanPass = config.email.password.trim().replace(/\s+/g, '');
-  const cleanUser = config.email.user.trim();
-  const isGmail =
-    config.email.host?.toLowerCase().includes('gmail') ||
-    cleanUser.toLowerCase().endsWith('@gmail.com');
+  const host = config.email.host?.trim() || process.env.EMAIL_HOST?.trim() || '';
+  const isGmail = host.toLowerCase().includes('gmail') || user.toLowerCase().endsWith('@gmail.com');
 
   if (isGmail) {
-    // Official Nodemailer Gmail service preset (bypasses ISP port 587 blocks and handles SSL automatically)
-    return nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: cleanUser,
-        pass: cleanPass,
-      },
-      tls: {
-        rejectUnauthorized: false,
-      },
+    // High-speed direct SSL pool on port 465 for Gmail (bypasses slow STARTTLS 587 handshake)
+    cachedTransporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
+      pool: true,
+      maxConnections: 5,
+      maxMessages: 100,
+      auth: { user, pass },
+      tls: { rejectUnauthorized: false },
+      connectionTimeout: 8000,
+      greetingTimeout: 8000,
+      socketTimeout: 10000,
+    });
+  } else {
+    const port = Number(config.email.port || process.env.EMAIL_PORT || 587);
+    cachedTransporter = nodemailer.createTransport({
+      host: host || 'smtp.gmail.com',
+      port,
+      secure: port === 465,
+      pool: true,
+      maxConnections: 5,
+      maxMessages: 100,
+      auth: { user, pass },
+      tls: { rejectUnauthorized: false },
+      connectionTimeout: 8000,
+      greetingTimeout: 8000,
+      socketTimeout: 10000,
     });
   }
 
-  return nodemailer.createTransport({
-    host: config.email.host,
-    port: config.email.port || 587,
-    secure: config.email.port === 465,
-    auth: {
-      user: cleanUser,
-      pass: cleanPass,
-    },
-    tls: {
-      rejectUnauthorized: false,
-    },
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
-  } as any);
+  return cachedTransporter;
 };
-
-const transporter = createTransporter();
 
 /**
  * Verifies SMTP server connectivity and authentication.
  */
 export const verifySmtpConnection = async (): Promise<{ ok: boolean; error?: string }> => {
+  const transporter = getTransporter();
   if (!transporter) {
     return {
       ok: false,
@@ -74,11 +83,15 @@ export const sendVerificationOTP = async (
   fullName: string,
   otp: string
 ): Promise<void> => {
+  const transporter = getTransporter();
   if (!transporter) {
     throw new Error(
       'Email service is not configured. Please provide EMAIL_USER and EMAIL_PASSWORD in .env.'
     );
   }
+
+  const senderUser = config.email.user?.trim() || process.env.EMAIL_USER?.trim();
+  const fromAddress = config.email.from || process.env.EMAIL_FROM || `TeleVault <${senderUser}>`;
 
   const htmlContent = `
     <!DOCTYPE html>
@@ -117,7 +130,7 @@ export const sendVerificationOTP = async (
   `;
 
   await transporter.sendMail({
-    from: config.email.from || `TeleVault <${config.email.user}>`,
+    from: fromAddress,
     to: email,
     subject: `Your TeleVault Verification Code: ${otp}`,
     text: `Hi ${fullName || 'there'},\n\nYour TeleVault verification code is: ${otp}\n\nThis code will expire in 10 minutes.\n\n— TeleVault`,

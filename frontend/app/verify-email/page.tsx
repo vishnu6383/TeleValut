@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useRef, useState, ClipboardEvent, KeyboardEvent }
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Mail, CheckCircle2, AlertCircle, RefreshCw, ArrowRight, KeyRound, Sun, Moon } from 'lucide-react';
-import { api } from '../../lib/api';
+import { api, setAuthToken } from '../../lib/api';
 
 function maskEmail(email: string): string {
   if (!email || !email.includes('@')) return email || 'your email';
@@ -48,9 +48,15 @@ export default function VerifyEmailPage() {
   };
 
   useEffect(() => {
-    const savedEmail = sessionStorage.getItem('verifyEmail') ?? '';
-    if (savedEmail) {
-      setEmail(savedEmail);
+    const params = new URLSearchParams(window.location.search);
+    const paramEmail = params.get('email')?.trim().toLowerCase();
+    const savedEmail = sessionStorage.getItem('verifyEmail')?.trim().toLowerCase() ?? '';
+    const initialEmail = paramEmail || savedEmail;
+
+    if (initialEmail) {
+      setEmail(initialEmail);
+      sessionStorage.setItem('verifyEmail', initialEmail);
+      setIsCustomEmail(false);
     } else {
       setIsCustomEmail(true);
     }
@@ -136,15 +142,19 @@ export default function VerifyEmailPage() {
 
     setLoading(true);
     try {
-      await api('/auth/verify-email', {
+      const data = await api<{ user?: { id: string; username: string; email: string; fullName: string }; token?: string; email: string }>('/auth/verify-email', {
         method: 'POST',
         body: JSON.stringify({ email: targetEmail, otp: fullOtp }),
       });
 
+      if (data?.token) {
+        setAuthToken(data.token);
+      }
+
       setVerifiedSuccess(true);
-      setNotice('Email verified successfully! Redirecting you to sign in...');
+      setNotice('Email verified successfully! Unlocking your vault...');
       sessionStorage.removeItem('verifyEmail');
-      setTimeout(() => router.push('/login'), 1500);
+      setTimeout(() => router.push(data?.token ? '/dashboard' : '/login'), 1200);
     } catch (err) {
       setError((err as Error).message || 'Invalid or expired verification code.');
     } finally {

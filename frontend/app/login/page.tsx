@@ -72,8 +72,25 @@ export default function LoginPage() {
         setAuthToken(data.token);
       }
       router.push('/dashboard');
-    } catch (err) {
-      setError((err as Error).message || 'Invalid email/username or password.');
+    } catch (err: unknown) {
+      const apiErr = err as { message?: string; code?: string; data?: { email?: string; requiresVerification?: boolean } };
+      if (
+        apiErr?.code === 'EMAIL_NOT_VERIFIED' ||
+        apiErr?.data?.requiresVerification ||
+        apiErr?.message?.toLowerCase().includes('verify')
+      ) {
+        const unverifiedEmail = apiErr?.data?.email || (identifier.includes('@') ? identifier.trim() : '');
+        if (unverifiedEmail) {
+          sessionStorage.setItem('verifyEmail', unverifiedEmail);
+        }
+        router.push(
+          unverifiedEmail
+            ? `/verify-email?email=${encodeURIComponent(unverifiedEmail)}`
+            : '/verify-email'
+        );
+        return;
+      }
+      setError(apiErr?.message || 'Invalid email/username or password.');
     } finally {
       setLoading(false);
     }

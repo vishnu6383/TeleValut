@@ -71,12 +71,38 @@ router.post('/register', async (req, res, next) => {
     });
 
     if (existing) {
-      return failure(
+      if (existing.isEmailVerified) {
+        return failure(
+          res,
+          existing.email === normalizedEmail
+            ? 'An account with this email address already exists. Please log in.'
+            : 'That username is already taken.',
+          409
+        );
+      }
+
+      // Existing unverified account: update user credentials & dispatch fresh OTP
+      const passwordHash = await bcrypt.hash(password, 12);
+      existing.fullName = fullName.trim();
+      existing.username = normalizedUsername;
+      existing.passwordHash = passwordHash;
+      await existing.save();
+
+      try {
+        await sendOtp(existing);
+      } catch (error: any) {
+        return failure(
+          res,
+          error?.message || 'Failed to send verification email. Please check your email configuration.',
+          500
+        );
+      }
+
+      return success(
         res,
-        existing.email === normalizedEmail
-          ? 'An account with this email address already exists.'
-          : 'That username is already taken.',
-        409
+        { email: existing.email, requiresVerification: true },
+        'Account registration updated. A fresh verification code was sent to your email.',
+        200
       );
     }
 
@@ -105,7 +131,7 @@ router.post('/register', async (req, res, next) => {
 
     return success(
       res,
-      { email: user.email },
+      { email: user.email, requiresVerification: true },
       'Verification code sent to your email.',
       201
     );
@@ -165,14 +191,19 @@ router.post('/verify-email', async (req, res, next) => {
       }
     }
 
-    // OTP Verified Successfully -> Invalidate OTP and mark verified
+    // OTP Verified Successfully -> Invalidate OTP, mark verified, and issue auth token
     user.isEmailVerified = true;
     user.emailVerificationOtpHash = null;
     user.emailVerificationOtpExpiresAt = null;
     user.otpAttempts = 0;
     await user.save();
 
-    return success(res, { email: user.email }, 'Email verified successfully. You can now log in.');
+    const token = issueCookie(res, user._id.toString());
+    return success(
+      res,
+      { user: publicUser(user), token, email: user.email },
+      'Email verified successfully. Welcome to TeleVault!'
+    );
   } catch (error) {
     return next(error);
   }
@@ -242,7 +273,24 @@ router.post('/login', async (req, res, next) => {
     }
 
     if (!user.isEmailVerified) {
-      return failure(res, 'Please verify your email before logging in.', 403);
+      try {
+        const elapsed = user.lastOtpSentAt ? Date.now() - new Date(user.lastOtpSentAt).getTime() : 999999;
+        if (elapsed > 30000) {
+          await sendOtp(user);
+        }
+      } catch (err) {
+        console.error('[TeleVault Auth] Failed to dispatch OTP during unverified login:', err);
+      }
+
+      return res.status(403).json({
+        success: false,
+        code: 'EMAIL_NOT_VERIFIED',
+        message: 'Your email address is not verified yet. A verification code has been sent to your email.',
+        data: {
+          email: user.email,
+          requiresVerification: true,
+        },
+      });
     }
 
     const token = issueCookie(res, user._id.toString());

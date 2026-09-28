@@ -127,9 +127,15 @@ export default function RegisterPage() {
       });
 
       sessionStorage.setItem('verifyEmail', normalizedEmail);
-      router.push('/verify-email');
-    } catch (err) {
-      setError((err as Error).message || 'Registration failed. Please try again.');
+      router.push(`/verify-email?email=${encodeURIComponent(normalizedEmail)}`);
+    } catch (err: unknown) {
+      const apiErr = err as { message?: string; code?: string; data?: { requiresVerification?: boolean } };
+      if (apiErr?.code === 'EMAIL_NOT_VERIFIED' || apiErr?.data?.requiresVerification) {
+        sessionStorage.setItem('verifyEmail', form.email.trim().toLowerCase());
+        router.push(`/verify-email?email=${encodeURIComponent(form.email.trim().toLowerCase())}`);
+        return;
+      }
+      setError(apiErr?.message || 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }
