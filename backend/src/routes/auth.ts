@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { User, IUser } from '../models/User';
 import { config } from '../config';
-import { sendVerificationOTP, verifySmtpConnection } from '../services/emailService';
+import { sendVerificationOTP, sendPasswordResetOTP, verifySmtpConnection } from '../services/emailService';
 import { authenticate } from '../middleware/auth';
 import { failure, success } from '../utils/api';
 
@@ -52,6 +52,26 @@ const sendOtp = async (user: IUser): Promise<void> => {
   console.log('====================================================');
 
   await sendVerificationOTP(user.email, user.fullName, otp);
+};
+
+/**
+ * Generates 6-digit OTP for password reset and dispatches email.
+ */
+const sendResetOtp = async (user: IUser): Promise<void> => {
+  const otp = crypto.randomInt(100000, 1000000).toString();
+  const hashed = otpHash(otp);
+
+  user.passwordResetOtpHash = hashed;
+  user.passwordResetOtpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  user.passwordResetOtpAttempts = 0;
+  user.lastPasswordResetOtpSentAt = new Date();
+  await user.save();
+
+  console.log('====================================================');
+  console.log(`[TeleVault Password Reset OTP] Email: ${user.email} -> CODE: ${otp}`);
+  console.log('====================================================');
+
+  await sendPasswordResetOTP(user.email, user.fullName, otp);
 };
 
 // 0. EMAIL HEALTH CHECK ENDPOINT
@@ -346,4 +366,168 @@ router.get('/me', authenticate, async (req, res, next) => {
   }
 });
 
+// 6. FORGOT PASSWORD (REQUEST OTP)
+router.post('/forgot-password', async (req, res, next) => {
+  try {
+    const identifier = String(req.body.identifier ?? req.body.email ?? '').toLowerCase().trim();
+    if (!identifier) {
+      return failure(res, 'Please provide your registered email or username.', 400);
+    }
+
+    const user = await User.findOne({
+      $or: [{ email: identifier }, { username: identifier }],
+    });
+
+    if (!user) {
+      return failure(res, 'No account found with this email or username.', 404);
+    }
+
+    // 15-second cooldown check
+    if (user.lastPasswordResetOtpSentAt) {
+      const elapsed = Date.now() - new Date(user.lastPasswordResetOtpSentAt).getTime();
+      if (elapsed < 15_000) {
+        const remainingSeconds = Math.ceil((15_000 - elapsed) / 1000);
+        return failure(
+          res,
+          `Please wait ${remainingSeconds} second${remainingSeconds === 1 ? '' : 's'} before requesting another code.`,
+          429
+        );
+      }
+    }
+
+    try {
+      await sendResetOtp(user);
+    } catch (err: any) {
+      return failure(
+        res,
+        err?.message || 'Failed to send password reset email. Please check your email configuration on Render.',
+        500
+      );
+    }
+
+    return success(
+      res,
+      { email: user.email },
+      'Password reset verification code sent to your email.'
+    );
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// 7. RESET PASSWORD (VERIFY OTP & UPDATE PASSWORD)
+router.post('/reset-password', async (req, res, next) => {
+  try {
+    const email = String(req.body.email ?? '').toLowerCase().trim();
+    const submittedOtp = String(req.body.otp ?? '').trim();
+    const newPassword = String(req.body.newPassword ?? req.body.password ?? '');
+
+    if (!email || !submittedOtp || !/^\d{6}$/.test(submittedOtp)) {
+      return failure(res, 'Please enter a valid 6-digit verification code and email.', 400);
+    }
+
+    if (!newPassword || newPassword.length < 8) {
+      return failure(res, 'New password must be at least 8 characters long.', 400);
+    }
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return failure(res, 'This password reset request is not valid.', 400);
+    }
+
+    if ((user.passwordResetOtpAttempts ?? 0) >= 5) {
+      user.passwordResetOtpHash = null;
+      user.passwordResetOtpExpiresAt = null;
+      await user.save();
+      return failure(res, 'Too many incorrect attempts. Please request a new reset code.', 429);
+    }
+
+    if (!user.passwordResetOtpExpiresAt || new Date(user.passwordResetOtpExpiresAt) < new Date()) {
+      return failure(res, 'This reset code has expired. Please request a new code.', 400);
+    }
+
+    const submittedHash = otpHash(submittedOtp);
+
+    if (submittedHash !== user.passwordResetOtpHash) {
+      user.passwordResetOtpAttempts = (user.passwordResetOtpAttempts ?? 0) + 1;
+      if (user.passwordResetOtpAttempts >= 5) {
+        user.passwordResetOtpHash = null;
+        user.passwordResetOtpExpiresAt = null;
+        await user.save();
+        return failure(res, 'Too many incorrect attempts. Please request a new reset code.', 429);
+      } else {
+        await user.save();
+        const remaining = 5 - user.passwordResetOtpAttempts;
+        return failure(res, `Invalid reset code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`, 400);
+      }
+    }
+
+    // OTP is valid -> Update password
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    user.passwordHash = passwordHash;
+    user.passwordResetOtpHash = null;
+    user.passwordResetOtpExpiresAt = null;
+    user.passwordResetOtpAttempts = 0;
+    user.isEmailVerified = true; // Email ownership verified via OTP
+    await user.save();
+
+    return success(
+      res,
+      { email: user.email },
+      'Password reset successful. You can now sign in with your new password.'
+    );
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// 8. RESEND RESET OTP
+router.post('/resend-reset-otp', async (req, res, next) => {
+  try {
+    const email = String(req.body.email ?? req.body.identifier ?? '').toLowerCase().trim();
+    if (!email) return failure(res, 'Email address is required.', 400);
+
+    const user = await User.findOne({
+      $or: [{ email }, { username: email }],
+    });
+
+    if (!user) {
+      return failure(res, 'Account not found.', 404);
+    }
+
+    // 15-second cooldown check
+    if (user.lastPasswordResetOtpSentAt) {
+      const elapsed = Date.now() - new Date(user.lastPasswordResetOtpSentAt).getTime();
+      if (elapsed < 15_000) {
+        const remainingSeconds = Math.ceil((15_000 - elapsed) / 1000);
+        return failure(
+          res,
+          `Please wait ${remainingSeconds} second${remainingSeconds === 1 ? '' : 's'} before requesting another code.`,
+          429
+        );
+      }
+    }
+
+    try {
+      await sendResetOtp(user);
+    } catch (err: any) {
+      return failure(
+        res,
+        err?.message || 'Failed to send password reset email. Please check your email configuration on Render.',
+        500
+      );
+    }
+
+    return success(
+      res,
+      { email: user.email },
+      'A new password reset code was sent to your email.'
+    );
+  } catch (error) {
+    return next(error);
+  }
+});
+
 export default router;
+

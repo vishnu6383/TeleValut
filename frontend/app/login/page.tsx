@@ -260,7 +260,16 @@ export default function LoginPage() {
 
           {/* Password Field */}
           <div className="field">
-            <label htmlFor="password">Password</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+              <label htmlFor="password" style={{ margin: 0 }}>Password</label>
+              <Link
+                href="/forgot-password"
+                className="link"
+                style={{ fontSize: '0.8rem', color: 'var(--lime)', fontWeight: 600 }}
+              >
+                Forgot password?
+              </Link>
+            </div>
             <div className="field-input-wrap has-icon-left has-icon-right">
               <span className="field-icon-left">
                 <Lock size={17} />

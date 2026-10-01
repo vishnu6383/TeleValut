@@ -13,12 +13,10 @@ const required = (name: string): string => {
   if (!value && process.env.NODE_ENV === 'production') throw new Error(`Missing environment variable: ${name}`);
   return value ?? '';
 };
-
 const sanitizeOrigin = (url?: string): string => {
   if (!url) return 'http://localhost:3000';
   return url.trim().replace(/\/+$/, '').replace(/\/api\/?$/, '');
 };
-
 export const config = {
   port: Number(process.env.PORT ?? 5000),
   frontendUrl: sanitizeOrigin(process.env.FRONTEND_URL),
